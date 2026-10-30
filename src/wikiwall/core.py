@@ -7,7 +7,7 @@ from pathlib import Path
 from .config import Config, load_config
 from .history import History
 from .paths import history_path, wallpaper_path
-from .render import render_article
+from .render import Box, render_article
 from .wallpaper import get_screen_size, set_wallpaper
 from .wikipedia import Article, WikipediaClient, WikipediaError
 
@@ -20,6 +20,10 @@ class ChangeResult:
     image_path: Path
     width: int
     height: int
+    theme: str = "paper"
+    qr_box: Box | None = None
+    link_box: Box | None = None
+    skip_box: Box | None = None
 
 
 class WikiWall:
@@ -60,17 +64,21 @@ class WikiWall:
 
         self.client.save_last(article)
         destination = Path(output) if output is not None else wallpaper_path()
-        image_path = render_article(article, destination, width, height, theme)
+        rendered = render_article(article, destination, width, height, theme)
 
         if apply:
-            set_wallpaper(image_path)
+            set_wallpaper(rendered.path)
             self.history.add(article.title)
 
         return ChangeResult(
             article=article,
-            image_path=image_path,
+            image_path=rendered.path,
             width=width,
             height=height,
+            theme=theme,
+            qr_box=rendered.qr_box,
+            link_box=rendered.link_box,
+            skip_box=rendered.skip_box,
         )
 
 

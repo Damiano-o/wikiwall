@@ -57,6 +57,11 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Avvia senza icona nella tray",
     )
+    watch.add_argument(
+        "--no-overlay",
+        action="store_true",
+        help="Avvia senza QR e link cliccabili",
+    )
 
     sub.add_parser("install", help="Avvia WikiWall automaticamente al login")
     sub.add_parser("uninstall", help="Rimuove l'avvio automatico")
@@ -125,7 +130,10 @@ def cmd_next(args: argparse.Namespace) -> int:
 def cmd_watch(args: argparse.Namespace) -> int:
     watcher = Watcher(WikiWall(load_config()))
     try:
-        watcher.run(with_tray=not args.no_tray)
+        watcher.run(
+            with_tray=not args.no_tray,
+            with_overlay=not args.no_overlay,
+        )
     except KeyboardInterrupt:
         watcher.stop()
     return 0

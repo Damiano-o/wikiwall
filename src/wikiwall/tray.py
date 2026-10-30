@@ -20,7 +20,7 @@ def _icon_image() -> Any:
         outline=(25, 23, 20, 255),
         width=2,
     )
-    draw.rectangle((2, 2, 7, size - 3), fill=(178, 58, 43, 255))
+    draw.rectangle((2, 2, 7, size - 3), fill=(151, 3, 2, 255))
 
     font = None
     for name in ("georgiab.ttf", "georgia.ttf", "timesbd.ttf", "segoeuib.ttf"):
@@ -57,7 +57,16 @@ def create_icon(watcher: Any) -> Any:
                 lambda icon, item: watcher.request_change(),
                 default=True,
             ),
+            MenuItem(
+                "Salta voce",
+                lambda icon, item: watcher.skip_async(),
+            ),
             MenuItem("Apri voce", open_article),
+            MenuItem(
+                "QR e link cliccabili",
+                lambda icon, item: watcher.toggle_clickable_qr(),
+                checked=lambda item: watcher.clickable_qr,
+            ),
             MenuItem(
                 "Pausa",
                 lambda icon, item: watcher.toggle_pause(),

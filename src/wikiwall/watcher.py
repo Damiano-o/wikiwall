@@ -6,6 +6,8 @@ import time
 from typing import Any
 
 from .core import ChangeResult, WikiWall
+from .hotkey import HotkeyListener
+from .overlay import run_overlay
 from .wallpaper import get_idle_seconds, is_desktop_foreground
 
 LOGGER = logging.getLogger(__name__)
@@ -44,9 +46,14 @@ class Watcher:
         self.tick_seconds = tick_seconds
         self.desktop_hold_seconds = desktop_hold_seconds
         self.min_gap_seconds = min_gap_seconds
+        self.clickable_qr = config.clickable_qr
 
         self._stop = threading.Event()
         self._change_requested = threading.Event()
+        self._change_lock = threading.Lock()
+        self._overlay_stop = threading.Event()
+        self._overlay_thread: threading.Thread | None = None
+        self._hotkey: HotkeyListener | None = None
         self._paused = False
         self._desktop_was_foreground = False
         self._tray: Any | None = None
@@ -74,14 +81,81 @@ class Watcher:
         """Ask the loop to change the wallpaper at the next tick."""
         self._change_requested.set()
 
+    def skip_current(self) -> bool:
+        """Change the wallpaper immediately, ignoring the normal cooldowns."""
+        return self._change("salta")
+
+    def skip_async(self) -> None:
+        """Skip in a worker thread so tray and hotkey callbacks stay responsive."""
+        threading.Thread(
+            target=self.skip_current,
+            name="wikiwall-skip",
+            daemon=True,
+        ).start()
+
     def toggle_pause(self) -> None:
         self._paused = not self._paused
         if not self._paused:
             self.last_idle = get_idle_seconds()
         LOGGER.info("Watcher %s", "in pausa" if self._paused else "riattivato")
+        self._refresh_tray()
+
+    def toggle_clickable_qr(self) -> None:
+        self.clickable_qr = not self.clickable_qr
+        LOGGER.info("QR e link cliccabili: %s", "sì" if self.clickable_qr else "no")
+        self._refresh_tray()
+
+    def _refresh_tray(self) -> None:
+        if self._tray is None:
+            return
+        try:
+            self._tray.update_menu()
+        except Exception:  # noqa: BLE001 - the tray is optional
+            LOGGER.debug("Impossibile aggiornare il menu della tray", exc_info=True)
+
+    def start_interaction(self, *, with_overlay: bool = True) -> None:
+        """Start the clickable overlay and the global Ctrl+Alt+N shortcut."""
+        if with_overlay:
+            try:
+                self._overlay_stop.clear()
+                self._overlay_thread = threading.Thread(
+                    target=run_overlay,
+                    args=(self, self._overlay_stop),
+                    name="wikiwall-overlay",
+                    daemon=True,
+                )
+                self._overlay_thread.start()
+                LOGGER.info("Overlay cliccabile avviato")
+            except Exception:  # noqa: BLE001 - overlay is an enhancement
+                LOGGER.exception("Overlay cliccabile non disponibile")
+                self._overlay_thread = None
+
+        try:
+            self._hotkey = HotkeyListener(self.skip_async)
+            self._hotkey.start()
+        except Exception:  # noqa: BLE001 - the tray and the pill still work
+            LOGGER.exception("Scorciatoia globale non disponibile")
+            self._hotkey = None
+
+    def stop_interaction(self) -> None:
+        """Stop the overlay thread and unregister the global shortcut."""
+        self._overlay_stop.set()
+        thread = self._overlay_thread
+        if thread is not None and thread.is_alive():
+            thread.join(timeout=2.0)
+        self._overlay_thread = None
+
+        hotkey = self._hotkey
+        if hotkey is not None:
+            try:
+                hotkey.stop()
+            except Exception:  # noqa: BLE001 - shutdown is best effort
+                LOGGER.debug("Errore fermando la scorciatoia globale", exc_info=True)
+            self._hotkey = None
 
     def stop(self) -> None:
         self._stop.set()
+        self._overlay_stop.set()
 
     # ------------------------------------------------------------------ decision logic
 
@@ -125,22 +199,23 @@ class Watcher:
     # ------------------------------------------------------------------ loop
 
     def _change(self, reason: str) -> bool:
-        try:
-            result = self.app.change()
-        except Exception as exc:  # noqa: BLE001 - a failed refresh must not kill the watcher
-            LOGGER.exception("Cambio dello sfondo fallito (%s)", reason)
-            self.last_error = str(exc)
-            return False
+        with self._change_lock:
+            try:
+                result = self.app.change()
+            except Exception as exc:  # noqa: BLE001 - a failed refresh must not kill the watcher
+                LOGGER.exception("Cambio dello sfondo fallito (%s)", reason)
+                self.last_error = str(exc)
+                return False
 
-        self.current = result
-        self.last_change = time.monotonic()
-        self.last_idle = 0.0
-        self.desktop_triggered = True
-        self.last_error = None
+            self.current = result
+            self.last_change = time.monotonic()
+            self.last_idle = 0.0
+            self.desktop_triggered = True
+            self.last_error = None
         LOGGER.info("Sfondo cambiato (%s): %s", reason, result.article.title)
         return True
 
-    def run(self, with_tray: bool = True) -> None:
+    def run(self, with_tray: bool = True, with_overlay: bool = True) -> None:
         if with_tray:
             try:
                 from .tray import create_icon
@@ -152,6 +227,7 @@ class Watcher:
                 LOGGER.exception("Tray non disponibile, continuo senza icona")
                 self._tray = None
 
+        self.start_interaction(with_overlay=with_overlay)
         self.last_change = time.monotonic() - self.interval_seconds - 1
         self.last_idle = get_idle_seconds()
         LOGGER.info(
@@ -178,6 +254,7 @@ class Watcher:
 
                 self._stop.wait(self.tick_seconds)
         finally:
+            self.stop_interaction()
             if self._tray is not None:
                 try:
                     self._tray.stop()

@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "wikiwall"
-version = "0.1.0"
+version = "0.2.0"
 description = "Un articolo di qualità di Wikipedia italiano diverso sul tuo desktop Windows."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -43,6 +43,9 @@ Issues = "https://github.com/Damiano-o/wikiwall/issues"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+wikiwall = ["assets/fonts/*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

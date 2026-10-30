@@ -1,8 +1,9 @@
+import re
 from datetime import date
 
 import pytest
 
-from wikiwall.template import build_html, truncate_extract
+from wikiwall.template import build_html, split_lead, truncate_extract
 from wikiwall.wikipedia import Article
 
 
@@ -44,6 +45,58 @@ def test_truncate_extract_removes_section_headings():
     assert truncate_extract(text, 100) == "Introduzione. Altro testo."
 
 
+def test_split_lead_returns_first_sentence_and_rest():
+    lead, body = split_lead("Prima frase. Seconda frase.")
+    assert lead == "Prima frase."
+    assert body == "Seconda frase."
+
+
+def test_split_lead_handles_single_sentence():
+    assert split_lead("Solo una frase") == ("Solo una frase", "")
+
+
+def test_split_lead_handles_empty_text():
+    assert split_lead("") == ("", "")
+
+
+def test_split_lead_keeps_long_unpunctuated_text_as_body():
+    text = "parola " * 40
+    lead, body = split_lead(text, max_lead=40)
+    assert lead == ""
+    assert body == text.strip()
+
+
+def test_split_lead_uses_long_first_sentence_as_lead():
+    text = "Prima frase molto lunga " + "parola " * 20 + ". Seconda frase."
+    lead, body = split_lead(text, max_lead=40)
+    assert lead.startswith("Prima frase")
+    assert lead.endswith(".")
+    assert body == "Seconda frase."
+
+
+def test_split_lead_ignores_abbreviation_inside_parentheses():
+    text = (
+        'La grande onda (Kanagawa okinami ura, lett. "Una grande onda") '
+        "è una xilografia del 1830. È famosa nel mondo."
+    )
+    lead, body = split_lead(text)
+    assert lead.endswith("1830.")
+    assert body == "È famosa nel mondo."
+
+
+def test_split_lead_ignores_period_inside_parentheses():
+    text = "Un esempio (vedi fig. 2) è questo. Poi altro."
+    lead, body = split_lead(text)
+    assert lead == "Un esempio (vedi fig. 2) è questo."
+    assert body == "Poi altro."
+
+
+def test_lead_starting_with_apostrophe_skips_dropcap():
+    article = make_article(extract="L'Italia è una repubblica. Il resto della voce.")
+    markup = build_html(article, 1920, 1200, today=date(2026, 10, 30))
+    assert 'class="lead no-dropcap"' in markup
+
+
 def test_build_html_escapes_content():
     article = make_article(
         title="<script>alert(1)</script>",
@@ -69,6 +122,62 @@ def test_build_html_contains_article_fields():
     assert "VOCE IN VETRINA" in markup
 
 
+def test_build_html_uses_brand_fonts():
+    markup = build_html(make_article(), 1920, 1200)
+    assert "Source Serif 4" in markup
+    assert "Montserrat" in markup
+    assert "data:font/woff2;base64," in markup
+
+
+def test_build_html_has_click_targets():
+    markup = build_html(make_article(), 1920, 1200)
+    assert 'id="qr-target"' in markup
+    assert 'id="article-link"' in markup
+    assert 'id="skip-target"' in markup
+
+
+def test_build_html_has_skip_action_and_qr_label():
+    markup = build_html(make_article(), 1920, 1200)
+    assert "Salta voce" in markup
+    assert "Clicca il QR" in markup
+    assert "o il link" in markup
+
+
+def test_build_html_uses_lead_and_body():
+    article = make_article(
+        extract="Prima frase della voce. Seconda frase con altri dettagli.",
+    )
+    markup = build_html(article, 1920, 1200)
+    assert '<p class="lead">Prima frase della voce.</p>' in markup
+    assert '<p class="extract">Seconda frase con altri dettagli.</p>' in markup
+
+
+def test_build_html_keeps_a_250_char_lead_on_small_screens():
+    lead = "La voce " + "descrive " * 25 + "con precisione."
+    article = make_article(extract=lead + " Seconda frase.")
+    markup = build_html(article, 800, 600)
+    match = re.search(r'<p class="lead[^"]*">(.*?)</p>', markup)
+    assert match is not None
+    assert match.group(1).endswith("con precisione.")
+    assert "…" not in match.group(1)
+
+
+def test_build_html_caps_a_very_long_lead_on_small_screens():
+    long_lead = "Prima frase " + "molto lunga " * 80 + "fine."
+    article = make_article(extract=long_lead + " Seconda frase.")
+    markup = build_html(article, 800, 600)
+    match = re.search(r'<p class="lead[^"]*">(.*?)</p>', markup)
+    assert match is not None
+    assert len(match.group(1)) <= 360
+    assert '<p class="extract">' in markup
+
+
+def test_build_html_underlines_article_link():
+    markup = build_html(make_article(), 1920, 1200)
+    assert "text-decoration: underline" in markup
+    assert "↗" in markup
+
+
 def test_quality_kicker_for_quality_article():
     markup = build_html(make_article(quality="qualità"), 1920, 1200)
     assert "VOCE DI QUALITÀ" in markup
@@ -77,13 +186,15 @@ def test_quality_kicker_for_quality_article():
 def test_long_title_uses_smaller_font():
     long_title = "Un titolo davvero molto lungo che deve occupare più righe"
     markup = build_html(make_article(title=long_title), 1920, 1200)
-    assert "font-size: calc(62px * var(--s))" in markup
+    assert "--title-size: clamp(44px, calc(62px * var(--s)), 62px)" in markup
 
 
 def test_viewport_scales_typography():
     markup = build_html(make_article(), 960, 600)
     assert "--s: 0.5000" in markup
-    assert "font-size: calc(88px * var(--s))" in markup
+    assert "--title-size: clamp(44px, calc(88px * var(--s)), 88px)" in markup
+    assert "--body-size: clamp(15px, calc(21px * var(--s)), 21px)" in markup
+    assert "--qr-size: clamp(64px, calc(104px * var(--s)), 104px)" in markup
 
 
 def test_wide_viewport_uses_height_scale():

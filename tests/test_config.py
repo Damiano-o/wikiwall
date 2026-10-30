@@ -21,6 +21,18 @@ def test_custom_config_is_loaded(tmp_path):
     assert cfg.height is None
 
 
+def test_clickable_qr_defaults_to_true(tmp_path):
+    path = tmp_path / "config.toml"
+    path.write_text("[wikiwall]\n", encoding="utf-8")
+    assert load_config(path).clickable_qr is True
+
+
+def test_clickable_qr_can_be_disabled(tmp_path):
+    path = tmp_path / "config.toml"
+    path.write_text("[wikiwall]\nclickable_qr = false\n", encoding="utf-8")
+    assert load_config(path).clickable_qr is False
+
+
 def test_invalid_values_fall_back(tmp_path):
     path = tmp_path / "config.toml"
     path.write_text(

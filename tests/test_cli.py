@@ -24,9 +24,10 @@ def test_parser_next_options():
 
 
 def test_parser_watch_options():
-    args = build_parser().parse_args(["watch", "--no-tray"])
+    args = build_parser().parse_args(["watch", "--no-tray", "--no-overlay"])
     assert args.command == "watch"
     assert args.no_tray is True
+    assert args.no_overlay is True
 
 
 def test_parser_requires_a_command():

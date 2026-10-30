@@ -6,7 +6,7 @@
 
 WikiWall sceglie una voce dalla [Vetrina](https://it.wikipedia.org/wiki/Wikipedia:Vetrina) o dalle [Voci di qualità](https://it.wikipedia.org/wiki/Wikipedia:Voci_di_qualit%C3%A0) di Wikipedia in italiano, la impagina come una copertina editoriale e la usa come sfondo del desktop. Quando torni al computer, o quando apri il desktop, la voce cambia.
 
-Non è un sito web aperto a tutto schermo: è un'immagine pulita e leggibile, pensata per essere guardata di sfuggita e per invogliarti ad aprire la voce completa.
+Non è un sito web aperto a tutto schermo: è un'immagine pulita e leggibile, pensata per essere guardata di sfuggita e per invogliarti ad aprire la voce completa. Il QR e l'indirizzo della voce sono cliccabili quando il desktop è visibile.
 
 ## Caratteristiche
 
@@ -14,10 +14,23 @@ Non è un sito web aperto a tutto schermo: è un'immagine pulita e leggibile, pe
 - **Niente ripetizioni**: le ultime 50 voci vengono evitate.
 - **Più vetrina che qualità**: il 65% delle scelte arriva dalla Vetrina, il resto dalle Voci di qualità.
 - **Aggiornamento automatico**: al login, quando torni da una pausa, quando compare il desktop e ogni 10 minuti.
+- **QR e link cliccabili**: quando il desktop è in primo piano, il QR e l'indirizzo della voce aprono la pagina su Wikipedia. Il livello interattivo scompare se un'altra finestra copre lo sfondo.
+- **Salta voce**: il pulsante sullo sfondo, la voce nella tray e la scorciatoia `Ctrl+Alt+N` passano subito alla voce successiva.
 - **Tema carta o tema scuro**, con titolo, descrizione, estratto della voce, immagine, QR code e attribuzione.
+- **Tipografia editoriale**: Source Serif 4 per il testo e Montserrat per i dettagli, con un lead più grande e un estratto più breve.
+- **Layout fluido**: si adatta a 1920×1200, 1366×768 e 800×600 senza perdere leggibilità.
 - **Fallback offline**: se Wikipedia non risponde, viene riusata l'ultima voce renderizzata.
-- **Icona nella tray** con "Cambia ora", "Apri voce", "Pausa" ed "Esci".
+- **Icona nella tray** con "Cambia ora", "Salta voce", "Apri voce", "QR e link cliccabili", "Pausa" ed "Esci".
 - **Nessun servizio esterno**: tutto gira in locale; l'unica rete necessaria è quella verso Wikipedia.
+
+## Novità 0.2.0
+
+- QR e link cliccabili sopra lo sfondo, senza rubare il focus alle altre applicazioni.
+- Pulsante "Salta voce" sullo sfondo, nella tray e scorciatoia globale `Ctrl+Alt+N`.
+- Restyling con i font open source del brand Wikimedia, gerarchia lead/estratto e layout fluido.
+- Nuova etichetta del QR e URL più evidente.
+
+![Tema scuro](docs/screenshot-dark.jpg)
 
 ## Requisiti
 
@@ -63,6 +76,12 @@ python -m wikiwall next
 
 La prima esecuzione scarica la lista delle voci di qualità e la mette in cache per 7 giorni. Poi sceglie una voce, scarica l'immagine e imposta lo sfondo.
 
+Il comando `next` imposta solo lo sfondo. Per avere anche QR e link cliccabili, salta voce e aggiornamento automatico, avvia il watcher:
+
+```powershell
+python -m wikiwall watch
+```
+
 ### Avvio automatico
 
 ```powershell
@@ -75,7 +94,7 @@ Crea `%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\WikiWall.vbs`, che
 python -m wikiwall watch
 ```
 
-L'icona nella tray permette di cambiare subito la voce, aprirla nel browser, mettere in pausa il watcher o uscire.
+L'icona nella tray permette di cambiare subito la voce, saltarla, aprirla nel browser, disattivare il QR cliccabile, mettere in pausa il watcher o uscire.
 
 Per rimuovere l'avvio automatico:
 
@@ -91,7 +110,8 @@ python -m wikiwall uninstall
 | `python -m wikiwall next --no-set --output anteprima.png` | Genera solo l'immagine, senza toccare il desktop |
 | `python -m wikiwall next --theme dark` | Genera con il tema scuro |
 | `python -m wikiwall next --width 2560 --height 1440` | Forza una risoluzione diversa |
-| `python -m wikiwall watch` | Avvia il watcher e l'icona nella tray |
+| `python -m wikiwall watch` | Avvia watcher, tray, QR cliccabile e hotkey |
+| `python -m wikiwall watch --no-overlay` | Avvia il watcher senza QR e link cliccabili |
 | `python -m wikiwall watch --no-tray` | Avvia il watcher senza icona |
 | `python -m wikiwall install` | Installa l'avvio automatico al login |
 | `python -m wikiwall uninstall` | Rimuove l'avvio automatico |
@@ -102,6 +122,17 @@ python -m wikiwall uninstall
 | `python -m wikiwall setup` | Installa Chromium per Playwright |
 
 Se hai attivato il virtualenv, puoi usare `wikiwall` al posto di `python -m wikiwall`.
+
+## Scorciatoie
+
+| Scorciatoia | Azione |
+| --- | --- |
+| `Ctrl+Alt+N` | Salta alla voce successiva |
+| Clic sul QR | Apre la voce su Wikipedia |
+| Clic sull'indirizzo della voce | Apre la voce su Wikipedia |
+| Clic su "Salta voce" | Passa alla voce successiva |
+
+La scorciatoia è globale: funziona anche quando un'altra applicazione è in primo piano. Se `Ctrl+Alt+N` è già usata da un altro programma, WikiWall lo segnala nel log e lascia disponibili il pulsante sullo sfondo e la voce nella tray.
 
 ## Configurazione
 
@@ -132,6 +163,9 @@ history_size = 50
 # Ogni quanti giorni riscaricare la lista delle voci di qualità
 quality_cache_days = 7
 
+# QR e link cliccabili sopra lo sfondo
+clickable_qr = true
+
 # Facoltativo: forza una risoluzione (utile per test o monitor diversi)
 # width = 2560
 # height = 1440
@@ -143,15 +177,16 @@ Dopo una modifica, riavvia `wikiwall watch` (tray → Esci, poi di nuovo `python
 
 1. **Lista delle voci**: WikiWall interroga l'API di Wikipedia (`action=parse&prop=links`) sulle pagine `Wikipedia:Vetrina` e `Wikipedia:Voci di qualità`, tiene solo i link nel namespace principale e li mette in cache per 7 giorni.
 2. **Scelta**: esclude le ultime voci usate, poi sceglie con una preferenza per la Vetrina (65%) rispetto alle Voci di qualità (35%).
-3. **Contenuto**: scarica l'inizio della voce (`prop=extracts`, circa 1400 caratteri), la descrizione breve, l'immagine principale e l'URL.
-4. **Impaginazione**: costruisce una pagina HTML con CSS, font di sistema e QR code, e la fotografa con Playwright Chromium alla risoluzione dello schermo.
+3. **Contenuto**: scarica l'inizio della voce (`prop=extracts`), la descrizione breve, l'immagine principale e l'URL.
+4. **Impaginazione**: costruisce una pagina HTML con CSS, font incorporati, lead, estratto e QR code, e la fotografa con Playwright Chromium alla risoluzione dello schermo.
 5. **Sfondo**: imposta il PNG con `SystemParametersInfoW` e imposta lo stile "Riempi" (`WallpaperStyle=10`).
-6. **Quando cambia**:
+6. **Interazione**: un piccolo overlay Tkinter senza cornice copre solo il QR, l'URL e il pulsante "Salta voce". Compare quando il desktop è in primo piano e il punto non è coperto da altre finestre; usa `WS_EX_NOACTIVATE` per non rubare il focus. Un clic apre il browser o salta la voce.
+7. **Quando cambia**:
    - all'avvio del watcher (al login);
    - quando il desktop è in primo piano per almeno 3 secondi, con un cooldown configurabile;
    - quando torni al computer dopo `idle_minutes` di inattività;
    - ogni `interval_minutes` minuti;
-   - quando premi "Cambia ora" nella tray.
+   - quando premi "Cambia ora" o "Salta voce" nella tray, o `Ctrl+Alt+N`.
 
 ## File e percorsi
 
@@ -166,11 +201,14 @@ Tutto viene salvato in `%LOCALAPPDATA%\WikiWall\`:
 | `cache\quality.json` | Lista delle voci di qualità |
 | `cache\last_article.json` | Ultima voce, usata come fallback offline |
 
+I font sono inclusi nel pacchetto, in `src/wikiwall/assets/fonts/`.
+
 ## Limitazioni
 
-- **Solo Windows**: l'impostazione dello sfondo usa API Win32.
+- **Solo Windows**: l'impostazione dello sfondo e l'overlay usano API Win32.
 - **Solo monitor principale**: il PNG viene generato alla risoluzione dello schermo primario. Il supporto multi-monitor non è ancora incluso.
-- **Immagine statica**: non è una pagina web interattiva; per leggere tutta la voce c'è il QR code o il comando "Apri voce" nella tray.
+- **Overlay legato al desktop**: QR, link e pulsante "Salta voce" sono cliccabili solo quando il desktop è visibile e il watcher è in esecuzione. Se un'altra finestra copre quella zona, l'overlay si nasconde.
+- **Hotkey**: se `Ctrl+Alt+N` è occupata da un altro programma, restano disponibili il pulsante sullo sfondo e la tray.
 - **Internet**: la prima volta e a ogni nuova voce serve la rete. Se Wikipedia non risponde, WikiWall riusa l'ultima voce salvata.
 - **Lista di qualità**: se Wikipedia cambia la struttura delle pagine `Wikipedia:Vetrina` o `Wikipedia:Voci di qualità`, il parser potrebbe dover essere aggiornato.
 
@@ -187,14 +225,17 @@ Struttura del progetto:
 ```text
 src/wikiwall/
   wikipedia.py   API Wikipedia, lista di qualità, scelta della voce
-  template.py    HTML e CSS della copertina
-  render.py      rendering con Playwright
+  template.py    HTML e CSS della copertina, font e QR
+  render.py      rendering con Playwright e coordinate dei bersagli cliccabili
   wallpaper.py   sfondo Windows, inattività, desktop in primo piano
   core.py        orchestrazione: scegli → renderizza → imposta
-  watcher.py     ciclo automatico e trigger
+  watcher.py     ciclo automatico, trigger e interazione
+  overlay.py     QR, link e "Salta voce" cliccabili
+  hotkey.py      scorciatoia globale Ctrl+Alt+N
   tray.py        icona e menu nella tray
   startup.py     avvio automatico al login
   cli.py         comandi da terminale
+  assets/fonts/  Montserrat e Source Serif 4 (OFL)
 tests/           test unitari
 ```
 
@@ -208,11 +249,14 @@ I testi e le immagini delle voci provengono da **Wikipedia** e sono distribuiti 
 
 WikiWall non è affiliato alla Wikimedia Foundation. Wikipedia è un marchio della Wikimedia Foundation.
 
-Lo screenshot di esempio mostra la voce [La grande onda di Kanagawa](https://it.wikipedia.org/wiki/La_grande_onda_di_Kanagawa); l'opera raffigurata è di Katsushika Hokusai ed è nel pubblico dominio.
+I font [Montserrat](https://github.com/JulietaUla/Montserrat) e [Source Serif 4](https://github.com/adobe-fonts/source-serif) sono distribuiti con licenza **SIL Open Font License 1.1**; le licenze sono incluse in `src/wikiwall/assets/fonts/`.
+
+Lo screenshot chiaro mostra la voce [La grande onda di Kanagawa](https://it.wikipedia.org/wiki/La_grande_onda_di_Kanagawa); l'opera raffigurata è di Katsushika Hokusai ed è nel pubblico dominio. Lo screenshot scuro mostra il [Colosseo](https://it.wikipedia.org/wiki/Colosseo).
 
 ## Crediti
 
 - [Wikipedia](https://it.wikipedia.org) e [Wikimedia Commons](https://commons.wikimedia.org) per contenuti e API.
 - [Playwright](https://playwright.dev/python/) per il rendering HTML.
 - [Pillow](https://python-pillow.org/), [pystray](https://github.com/moses-palmer/pystray) e [qrcode](https://github.com/lincolnloop/python-qrcode) per immagine, tray e QR.
+- [Montserrat](https://github.com/JulietaUla/Montserrat) e [Source Serif 4](https://github.com/adobe-fonts/source-serif) per la tipografia.
 - Ispirato all'idea di avere ogni giorno una pagina diversa da leggere, senza aprire il browser.

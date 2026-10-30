@@ -1,10 +1,21 @@
 from __future__ import annotations
 
 import os
+from dataclasses import dataclass
 from pathlib import Path
 
 from .template import build_html
 from .wikipedia import Article
+
+Box = tuple[float, float, float, float]
+
+
+@dataclass(frozen=True, slots=True)
+class RenderResult:
+    path: Path
+    qr_box: Box | None = None
+    link_box: Box | None = None
+    skip_box: Box | None = None
 
 
 def _chrome_candidates() -> list[Path]:
@@ -18,13 +29,20 @@ def _chrome_candidates() -> list[Path]:
     return sorted(found)
 
 
+def _bounding_box(locator: object) -> Box | None:
+    box = locator.bounding_box()  # type: ignore[attr-defined]
+    if box is None:
+        return None
+    return (box["x"], box["y"], box["width"], box["height"])
+
+
 def render_article(
     article: Article,
     output: Path,
     width: int,
     height: int,
     theme: str = "paper",
-) -> Path:
+) -> RenderResult:
     """Render *article* to a PNG wallpaper at exactly *width* x *height*."""
     output = Path(output)
     output.parent.mkdir(parents=True, exist_ok=True)
@@ -79,11 +97,14 @@ def render_article(
                 }))"""
             )
             page.wait_for_timeout(250)
+            qr_box = _bounding_box(page.locator("#qr-target"))
+            link_box = _bounding_box(page.locator("#article-link"))
+            skip_box = _bounding_box(page.locator("#skip-target"))
             page.screenshot(path=str(output), full_page=False, type="png")
         finally:
             browser.close()
 
-    return output
+    return RenderResult(output, qr_box, link_box, skip_box)
 
 
-__all__ = ["render_article"]
+__all__ = ["Box", "RenderResult", "render_article"]

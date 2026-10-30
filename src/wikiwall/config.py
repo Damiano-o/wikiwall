@@ -15,6 +15,7 @@ idle_minutes = 5
 desktop_cooldown_minutes = 10
 history_size = 50
 quality_cache_days = 7
+clickable_qr = true
 # width = 1920
 # height = 1200
 """
@@ -29,6 +30,7 @@ class Config:
     desktop_cooldown_minutes: int = 10
     history_size: int = 50
     quality_cache_days: int = 7
+    clickable_qr: bool = True
     width: int | None = None
     height: int | None = None
 
@@ -51,6 +53,18 @@ def _optional_positive(value: object) -> int | None:
     return number if number > 0 else None
 
 
+def _bool(value: object, default: bool) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        lowered = value.strip().lower()
+        if lowered in {"1", "true", "yes", "on", "si", "sì"}:
+            return True
+        if lowered in {"0", "false", "no", "off"}:
+            return False
+    return default
+
+
 def _config_from_mapping(data: dict) -> Config:
     section = data.get("wikiwall", data)
     if not isinstance(section, dict):
@@ -69,6 +83,7 @@ def _config_from_mapping(data: dict) -> Config:
         desktop_cooldown_minutes=_positive(section.get("desktop_cooldown_minutes"), 10),
         history_size=_positive(section.get("history_size"), 50),
         quality_cache_days=_positive(section.get("quality_cache_days"), 7),
+        clickable_qr=_bool(section.get("clickable_qr"), True),
         width=_optional_positive(section.get("width")),
         height=_optional_positive(section.get("height")),
     )

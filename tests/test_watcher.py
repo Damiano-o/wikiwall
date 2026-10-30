@@ -1,3 +1,4 @@
+import threading
 from pathlib import Path
 
 from wikiwall.config import Config
@@ -114,6 +115,24 @@ def test_change_updates_state_and_current_url():
     assert watcher.last_error is None
 
 
+def test_skip_current_changes_immediately():
+    app = FakeApp()
+    watcher = make_watcher(app)
+    assert watcher.skip_current() is True
+    assert app.calls == 1
+    assert watcher.current is not None
+    assert watcher.current.article.title == "Italia"
+
+
+def test_toggle_clickable_qr():
+    watcher = make_watcher()
+    assert watcher.clickable_qr is True
+    watcher.toggle_clickable_qr()
+    assert watcher.clickable_qr is False
+    watcher.toggle_clickable_qr()
+    assert watcher.clickable_qr is True
+
+
 def test_change_records_error_without_crashing():
     app = FakeApp()
     app.error = RuntimeError("boom")
@@ -135,3 +154,68 @@ def test_stop_sets_event():
     watcher = make_watcher()
     watcher.stop()
     assert watcher._stop.is_set()
+
+
+def test_start_and_stop_interaction(monkeypatch):
+    overlay_started = threading.Event()
+    overlay_stopped = threading.Event()
+
+    class FakeHotkey:
+        def __init__(self, callback):
+            self.callback = callback
+            self.started = False
+            self.stopped = False
+
+        def start(self):
+            self.started = True
+            return True
+
+        def stop(self):
+            self.stopped = True
+
+    def fake_overlay(watcher, stop_event):
+        overlay_started.set()
+        stop_event.wait(2)
+        overlay_stopped.set()
+
+    monkeypatch.setattr("wikiwall.watcher.run_overlay", fake_overlay)
+    monkeypatch.setattr("wikiwall.watcher.HotkeyListener", FakeHotkey)
+
+    watcher = make_watcher()
+    watcher.start_interaction(with_overlay=True)
+    assert overlay_started.wait(1)
+    assert watcher._hotkey is not None
+    hotkey = watcher._hotkey
+    assert hotkey.started is True
+
+    watcher.stop_interaction()
+    assert overlay_stopped.wait(1)
+    assert hotkey.stopped is True
+
+
+def test_skip_async_runs_in_background(monkeypatch):
+    watcher = make_watcher()
+    called = threading.Event()
+    monkeypatch.setattr(watcher, "skip_current", lambda: called.set())
+
+    watcher.skip_async()
+
+    assert called.wait(1)
+
+
+def test_run_starts_and_stops_interaction(monkeypatch):
+    watcher = make_watcher()
+    events = []
+    monkeypatch.setattr(
+        watcher, "start_interaction", lambda **kwargs: events.append("start")
+    )
+    monkeypatch.setattr(watcher, "stop_interaction", lambda: events.append("stop"))
+    monkeypatch.setattr("wikiwall.watcher.get_idle_seconds", lambda: 0.0)
+    monkeypatch.setattr("wikiwall.watcher.is_desktop_foreground", lambda: False)
+    monkeypatch.setattr(
+        watcher, "_change", lambda reason: watcher._stop.set()
+    )
+
+    watcher.run(with_tray=False, with_overlay=False)
+
+    assert events == ["start", "stop"]

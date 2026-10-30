@@ -5,6 +5,7 @@ import pytest
 from wikiwall import core
 from wikiwall.config import Config
 from wikiwall.core import WikiWall
+from wikiwall.render import RenderResult
 from wikiwall.wikipedia import Article, WikipediaError
 
 ARTICLE = Article(
@@ -72,7 +73,12 @@ def test_change_renders_and_applies(monkeypatch, tmp_path):
             theme=theme,
         )
         Path(output).write_bytes(b"png")
-        return Path(output)
+        return RenderResult(
+            path=Path(output),
+            qr_box=(10.0, 20.0, 86.0, 86.0),
+            link_box=(30.0, 40.0, 200.0, 20.0),
+            skip_box=(300.0, 40.0, 120.0, 30.0),
+        )
 
     monkeypatch.setattr(core, "render_article", fake_render)
     monkeypatch.setattr(core, "set_wallpaper", lambda path: applied.append(path))
@@ -82,6 +88,10 @@ def test_change_renders_and_applies(monkeypatch, tmp_path):
 
     assert result.article == ARTICLE
     assert result.image_path == Path(core.wallpaper_path())
+    assert result.theme == "paper"
+    assert result.qr_box == (10.0, 20.0, 86.0, 86.0)
+    assert result.link_box == (30.0, 40.0, 200.0, 20.0)
+    assert result.skip_box == (300.0, 40.0, 120.0, 30.0)
     assert rendered == {
         "article": ARTICLE,
         "output": Path(core.wallpaper_path()),
@@ -103,7 +113,7 @@ def test_change_without_apply_does_not_touch_history_or_wallpaper(monkeypatch, t
     monkeypatch.setattr(
         core,
         "render_article",
-        lambda article, out, width, height, theme: Path(out),
+        lambda article, out, width, height, theme: RenderResult(Path(out), None, None, None),
     )
     monkeypatch.setattr(core, "set_wallpaper", lambda path: applied.append(path))
 
@@ -120,7 +130,7 @@ def test_change_falls_back_to_last_article(monkeypatch):
     monkeypatch.setattr(
         core,
         "render_article",
-        lambda article, out, width, height, theme: Path(out),
+        lambda article, out, width, height, theme: RenderResult(Path(out), None, None, None),
     )
 
     app = WikiWall(Config(width=800, height=600), client=client, history=FakeHistory())
