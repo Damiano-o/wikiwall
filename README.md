@@ -8,7 +8,7 @@
 
 WikiWall sceglie una voce dalla [Vetrina](https://it.wikipedia.org/wiki/Wikipedia:Vetrina) o dalle [Voci di qualità](https://it.wikipedia.org/wiki/Wikipedia:Voci_di_qualit%C3%A0) di Wikipedia in italiano, la impagina come una copertina editoriale e la usa come sfondo del desktop. Quando torni al computer, o quando apri il desktop, la voce cambia.
 
-Non è un sito web aperto a tutto schermo: è un'immagine pulita e leggibile, pensata per essere guardata di sfuggita e per invogliarti ad aprire la voce completa. Il QR e l'indirizzo della voce sono cliccabili quando il desktop è visibile.
+Non è un sito web aperto a tutto schermo: è un'immagine pulita e leggibile, pensata per essere guardata di sfuggita e per invogliarti ad aprire la voce completa. Il QR e l'indirizzo della voce sono cliccabili quando la zona non è coperta da altre finestre.
 
 ## Caratteristiche
 
@@ -16,7 +16,7 @@ Non è un sito web aperto a tutto schermo: è un'immagine pulita e leggibile, pe
 - **Niente ripetizioni**: le ultime 50 voci vengono evitate.
 - **Più vetrina che qualità**: il 65% delle scelte arriva dalla Vetrina, il resto dalle Voci di qualità.
 - **Aggiornamento automatico**: al login, quando torni da una pausa, quando compare il desktop e ogni 10 minuti.
-- **QR e link cliccabili**: quando il desktop è in primo piano, il QR e l'indirizzo della voce aprono la pagina su Wikipedia. Il livello interattivo scompare se un'altra finestra copre lo sfondo.
+- **QR e link cliccabili**: quando la zona non è coperta da altre finestre, il QR e l'indirizzo della voce aprono la pagina su Wikipedia, anche se un'altra applicazione è in primo piano. Il livello interattivo scompare se una finestra copre quella zona.
 - **Salta voce**: il pulsante sullo sfondo, la voce nella tray e la scorciatoia `Ctrl+Alt+N` passano subito alla voce successiva.
 - **Tema carta o tema scuro**, con titolo, descrizione, estratto della voce, immagine, QR code e attribuzione.
 - **Tipografia editoriale**: Source Serif 4 per il testo e Montserrat per i dettagli, con un lead più grande e un estratto più breve.
@@ -24,6 +24,10 @@ Non è un sito web aperto a tutto schermo: è un'immagine pulita e leggibile, pe
 - **Fallback offline**: se Wikipedia non risponde, viene riusata l'ultima voce renderizzata.
 - **Icona nella tray** con "Cambia ora", "Salta voce", "Apri voce", "QR e link cliccabili", "Pausa" ed "Esci".
 - **Nessun servizio esterno**: tutto gira in locale; l'unica rete necessaria è quella verso Wikipedia.
+
+## Novità 0.2.1
+
+- Il pulsante "Salta voce" e gli hotspot ora funzionano anche quando un'altra applicazione è in primo piano, purché la zona non sia coperta da una finestra.
 
 ## Novità 0.2.0
 
@@ -182,7 +186,7 @@ Dopo una modifica, riavvia `wikiwall watch` (tray → Esci, poi di nuovo `python
 3. **Contenuto**: scarica l'inizio della voce (`prop=extracts`), la descrizione breve, l'immagine principale e l'URL.
 4. **Impaginazione**: costruisce una pagina HTML con CSS, font incorporati, lead, estratto e QR code, e la fotografa con Playwright Chromium alla risoluzione dello schermo.
 5. **Sfondo**: imposta il PNG con `SystemParametersInfoW` e imposta lo stile "Riempi" (`WallpaperStyle=10`).
-6. **Interazione**: un piccolo overlay Tkinter senza cornice copre solo il QR, l'URL e il pulsante "Salta voce". Compare quando il desktop è in primo piano e il punto non è coperto da altre finestre; usa `WS_EX_NOACTIVATE` per non rubare il focus. Un clic apre il browser o salta la voce.
+6. **Interazione**: un piccolo overlay Tkinter senza cornice copre solo il QR, l'URL e il pulsante "Salta voce". Compare quando il punto non è coperto da altre finestre, anche se un'altra applicazione è in primo piano; usa `WS_EX_NOACTIVATE` per non rubare il focus. Un clic apre il browser o salta la voce.
 7. **Quando cambia**:
    - all'avvio del watcher (al login);
    - quando il desktop è in primo piano per almeno 3 secondi, con un cooldown configurabile;
@@ -209,7 +213,7 @@ I font sono inclusi nel pacchetto, in `src/wikiwall/assets/fonts/`.
 
 - **Solo Windows**: l'impostazione dello sfondo e l'overlay usano API Win32.
 - **Solo monitor principale**: il PNG viene generato alla risoluzione dello schermo primario. Il supporto multi-monitor non è ancora incluso.
-- **Overlay legato al desktop**: QR, link e pulsante "Salta voce" sono cliccabili solo quando il desktop è visibile e il watcher è in esecuzione. Se un'altra finestra copre quella zona, l'overlay si nasconde.
+- **Overlay sopra lo sfondo**: QR, link e pulsante "Salta voce" sono cliccabili quando la zona non è coperta da altre finestre e il watcher è in esecuzione. Non serve che il desktop sia in primo piano; se una finestra copre quella zona, l'overlay si nasconde.
 - **Hotkey**: se `Ctrl+Alt+N` è occupata da un altro programma, restano disponibili il pulsante sullo sfondo e la tray.
 - **Internet**: la prima volta e a ogni nuova voce serve la rete. Se Wikipedia non risponde, WikiWall riusa l'ultima voce salvata.
 - **Lista di qualità**: se Wikipedia cambia la struttura delle pagine `Wikipedia:Vetrina` o `Wikipedia:Voci di qualità`, il parser potrebbe dover essere aggiornato.

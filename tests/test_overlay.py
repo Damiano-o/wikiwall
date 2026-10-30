@@ -1,7 +1,12 @@
+import sys
+import threading
+import types
 from pathlib import Path
+from types import SimpleNamespace
 
 from PIL import Image
 
+from wikiwall import overlay
 from wikiwall.overlay import box_contains, crop_box, is_clickable_window
 
 
@@ -42,3 +47,59 @@ def test_our_own_window_is_clickable():
 def test_other_windows_are_not_clickable():
     assert not is_clickable_window("Notepad", pid=123, own_pid=456)
     assert not is_clickable_window(None, pid=None, own_pid=456)
+
+
+def test_hotspot_works_even_when_desktop_is_not_foreground(monkeypatch):
+    class FakeRoot:
+        def withdraw(self):
+            pass
+
+        def after(self, _delay, _callback):
+            pass
+
+        def destroy(self):
+            pass
+
+    fake_tk = types.ModuleType("tkinter")
+    fake_tk.Tk = FakeRoot
+    monkeypatch.setitem(sys.modules, "tkinter", fake_tk)
+
+    class FakeHotspot:
+        def __init__(self):
+            self.shown = []
+
+        def show(self, box, image=None):
+            self.shown.append((box, image))
+
+        def hide(self):
+            pass
+
+        def destroy(self):
+            pass
+
+    class FakeWatcher:
+        clickable_qr = True
+        current_url = "https://it.wikipedia.org/wiki/Test"
+        current = SimpleNamespace(
+            image_path=Path("wallpaper.png"),
+            theme="paper",
+            qr_box=(10.0, 20.0, 30.0, 40.0),
+            link_box=(10.0, 70.0, 100.0, 20.0),
+            skip_box=(10.0, 100.0, 80.0, 30.0),
+        )
+
+    fake_hotspot = FakeHotspot()
+    overlay_window = overlay._Overlay(FakeWatcher(), threading.Event())
+    monkeypatch.setattr(overlay, "is_desktop_foreground", lambda: False, raising=False)
+    monkeypatch.setattr(overlay, "_cursor_position", lambda: (20, 110))
+    monkeypatch.setattr(overlay_window, "_is_desktop_at", lambda _x, _y: True)
+    monkeypatch.setattr(
+        overlay_window,
+        "_hotspot",
+        lambda _kind, _state: fake_hotspot,
+    )
+
+    overlay_window._tick()
+
+    assert fake_hotspot.shown == [((10.0, 100.0, 80.0, 30.0), None)]
+    overlay_window.close()

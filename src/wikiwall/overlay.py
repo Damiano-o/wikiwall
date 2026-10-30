@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING, Any
 
 from PIL import Image
 
-from .wallpaper import IS_WINDOWS, is_desktop_foreground
+from .wallpaper import IS_WINDOWS
 
 if TYPE_CHECKING:
     from .watcher import Watcher
@@ -292,6 +292,7 @@ class _Hotspot:
         self.window.bind("<Button-1>", self._click)
 
     def _click(self, _event: Any = None) -> None:
+        LOGGER.info("Click sull'hotspot %s", self.kind)
         self.callback()
 
     def show(self, box: Box, image: Image.Image | None = None) -> None:
@@ -379,6 +380,7 @@ class _Overlay:
         return self._hotspots[kind]
 
     def _open_link(self) -> None:
+        LOGGER.info("Apertura voce dall'overlay")
         self._hide_all()
         try:
             webbrowser.open(self.watcher.current_url)
@@ -413,7 +415,7 @@ class _Overlay:
                 return
 
             state = self._current_state()
-            if state is None or not is_desktop_foreground():
+            if state is None:
                 self._hide_all()
                 self.root.after(120, self._tick)
                 return
