@@ -1,5 +1,7 @@
 from datetime import date
 
+import pytest
+
 from wikiwall.template import build_html, truncate_extract
 from wikiwall.wikipedia import Article
 
@@ -75,7 +77,23 @@ def test_quality_kicker_for_quality_article():
 def test_long_title_uses_smaller_font():
     long_title = "Un titolo davvero molto lungo che deve occupare più righe"
     markup = build_html(make_article(title=long_title), 1920, 1200)
-    assert "font-size: 62px" in markup
+    assert "font-size: calc(62px * var(--s))" in markup
+
+
+def test_viewport_scales_typography():
+    markup = build_html(make_article(), 960, 600)
+    assert "--s: 0.5000" in markup
+    assert "font-size: calc(88px * var(--s))" in markup
+
+
+def test_wide_viewport_uses_height_scale():
+    markup = build_html(make_article(), 1920, 1080)
+    assert "--s: 0.9000" in markup
+
+
+def test_invalid_dimensions_are_rejected():
+    with pytest.raises(ValueError):
+        build_html(make_article(), 0, 600)
 
 
 def test_no_image_uses_gradient_and_initial():

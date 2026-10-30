@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import html
+import re
 from datetime import date
 from io import BytesIO
 from urllib.parse import unquote
@@ -190,6 +191,12 @@ body {
 }
 """
 
+# Every fixed pixel size in the layout scales with the viewport. The design is
+# tuned for 1920x1200; smaller screens get smaller type and padding, larger
+# screens get proportionally larger type.
+_PX = re.compile(r"(?<![\w.-])(-?\d+(?:\.\d+)?)px")
+CSS = _PX.sub(r"calc(\1px * var(--s))", CSS)
+
 
 def truncate_extract(text: str, limit: int = 800) -> str:
     """Trim an extract at a sentence or word boundary, preserving whole words."""
@@ -276,17 +283,23 @@ def build_html(
     theme: str = "paper",
     today: date | None = None,
 ) -> str:
+    if width <= 0 or height <= 0:
+        raise ValueError("La larghezza e l'altezza devono essere positive.")
+
     theme = "dark" if theme == "dark" else "paper"
     palette = THEMES[theme]
     today = today or date.today()
+    scale = min(width / 1920, height / 1200)
 
     title_size = _title_size(article.title)
+    title_style = f"font-size: calc({title_size}px * var(--s))"
     extract = truncate_extract(article.extract, _extract_limit(article.title))
     kicker = "VOCE IN VETRINA" if article.quality == "vetrina" else "VOCE DI QUALITÀ"
     hero_a, hero_b = _hero_colors(article.title)
 
     body_style = "; ".join(
         [
+            f"--s: {scale:.4f}",
             f"--paper: {palette['paper']}",
             f"--ink: {palette['ink']}",
             f"--body: {palette['body']}",
@@ -344,7 +357,7 @@ def build_html(
       </header>
       <div class="rule"></div>
       <main class="content">
-        <h1 class="title" style="font-size: {title_size}px">{html.escape(article.title)}</h1>
+        <h1 class="title" style="{title_style}">{html.escape(article.title)}</h1>
         {description_html}
         <p class="extract">{html.escape(extract)}</p>
       </main>
