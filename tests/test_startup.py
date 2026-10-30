@@ -6,13 +6,7 @@ from wikiwall import startup
 def test_startup_path_uses_appdata(monkeypatch, tmp_path):
     monkeypatch.setenv("APPDATA", str(tmp_path))
     expected = (
-        tmp_path
-        / "Microsoft"
-        / "Windows"
-        / "Start Menu"
-        / "Programs"
-        / "Startup"
-        / "WikiWall.vbs"
+        tmp_path / "Microsoft" / "Windows" / "Start Menu" / "Programs" / "Startup" / "WikiWall.vbs"
     )
     assert startup.startup_path() == expected
 

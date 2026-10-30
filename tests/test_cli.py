@@ -56,13 +56,7 @@ def test_install_and_uninstall_startup(monkeypatch, tmp_path, capsys):
 
     assert main(["install"]) == 0
     destination = (
-        appdata
-        / "Microsoft"
-        / "Windows"
-        / "Start Menu"
-        / "Programs"
-        / "Startup"
-        / "WikiWall.vbs"
+        appdata / "Microsoft" / "Windows" / "Start Menu" / "Programs" / "Startup" / "WikiWall.vbs"
     )
     assert destination.exists()
     assert "installato" in capsys.readouterr().out

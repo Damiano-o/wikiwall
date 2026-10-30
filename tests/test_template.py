@@ -37,6 +37,11 @@ def test_truncate_extract_falls_back_to_word_boundary():
     assert not result.endswith("parol…")
 
 
+def test_truncate_extract_removes_section_headings():
+    text = "Introduzione.\n\n== Storia ==\n\nAltro testo."
+    assert truncate_extract(text, 100) == "Introduzione. Altro testo."
+
+
 def test_build_html_escapes_content():
     article = make_article(
         title="<script>alert(1)</script>",

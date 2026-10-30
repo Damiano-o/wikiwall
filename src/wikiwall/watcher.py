@@ -28,8 +28,7 @@ class Watcher:
         config = app.config
         self.app = app
         self.interval_seconds = float(
-            (interval_minutes if interval_minutes is not None else config.interval_minutes)
-            * 60
+            (interval_minutes if interval_minutes is not None else config.interval_minutes) * 60
         )
         self.idle_threshold_seconds = float(
             (idle_minutes if idle_minutes is not None else config.idle_minutes) * 60

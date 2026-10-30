@@ -9,7 +9,7 @@ from dataclasses import asdict, dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
-from urllib.parse import unquote
+from urllib.parse import quote, unquote
 
 import requests
 
@@ -130,7 +130,7 @@ class WikipediaClient:
             parse = data.get("parse") or {}
             for link in parse.get("links") or []:
                 title = str(link.get("title", "")).strip()
-                if link.get("ns") != 0 or not title or ":" in title:
+                if link.get("ns") != 0 or not title:
                     continue
                 titles.setdefault(title, label)
 
@@ -245,7 +245,7 @@ class WikipediaClient:
             {
                 "action": "query",
                 "prop": "extracts|pageimages|description|info",
-                "exintro": "1",
+                "exchars": "1400",
                 "explaintext": "1",
                 "piprop": "original|thumbnail",
                 "inprop": "url",
@@ -272,7 +272,7 @@ class WikipediaClient:
         thumbnail = page.get("thumbnail") or {}
         image_url = original.get("source") or thumbnail.get("source") or None
         page_url = page.get("fullurl") or (
-            f"https://{self.language}.wikipedia.org/wiki/{title.replace(' ', '_')}"
+            f"https://{self.language}.wikipedia.org/wiki/{quote(title.replace(' ', '_'), safe='/')}"
         )
 
         return Article(

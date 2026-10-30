@@ -33,9 +33,9 @@ def pythonw_path() -> Path:
 
 def vbs_content(python: Path, working_dir: Path) -> str:
     return (
-        'Set shell = CreateObject("WScript.Shell")\r\n'
-        f'shell.CurrentDirectory = "{working_dir}"\r\n'
-        f'shell.Run Chr(34) & "{python}" & Chr(34) & " -m wikiwall watch", 0, False\r\n'
+        'Set shell = CreateObject("WScript.Shell")\n'
+        f'shell.CurrentDirectory = "{working_dir}"\n'
+        f'shell.Run Chr(34) & "{python}" & Chr(34) & " -m wikiwall watch", 0, False\n'
     )
 
 

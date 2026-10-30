@@ -193,7 +193,12 @@ body {
 
 def truncate_extract(text: str, limit: int = 800) -> str:
     """Trim an extract at a sentence or word boundary, preserving whole words."""
-    clean = " ".join(text.split())
+    lines = [
+        line.strip()
+        for line in text.splitlines()
+        if not (line.strip().startswith("==") and line.strip().endswith("=="))
+    ]
+    clean = " ".join(" ".join(lines).split())
     if len(clean) <= limit:
         return clean
 

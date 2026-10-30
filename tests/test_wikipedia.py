@@ -140,8 +140,7 @@ def test_summary_parses_api_payload(tmp_path):
                                 "extract": "La grande onda di Kanagawa è una xilografia.",
                                 "original": {"source": "https://example.org/onda.jpg"},
                                 "fullurl": (
-                                    "https://it.wikipedia.org/wiki/"
-                                    "La_grande_onda_di_Kanagawa"
+                                    "https://it.wikipedia.org/wiki/La_grande_onda_di_Kanagawa"
                                 ),
                             }
                         ]

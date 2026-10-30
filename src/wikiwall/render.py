@@ -56,8 +56,7 @@ def render_article(
         if browser is None:
             detail = errors[-1] if errors else "nessun browser disponibile"
             raise RuntimeError(
-                "Chromium non è disponibile. Esegui: wikiwall setup\n"
-                f"Dettaglio: {detail}"
+                f"Chromium non è disponibile. Esegui: wikiwall setup\nDettaglio: {detail}"
             )
 
         try:
