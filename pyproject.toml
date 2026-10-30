@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "wikiwall"
+version = "0.1.0"
+description = "Un articolo di qualità di Wikipedia italiano diverso sul tuo desktop Windows."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "Michele.Damiano" }]
+keywords = ["wikipedia", "wallpaper", "windows", "desktop", "italian"]
+dependencies = [
+    "requests>=2.31",
+    "playwright>=1.40",
+    "pillow>=10",
+    "pystray>=0.19",
+    "qrcode[pil]>=7.4",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "ruff>=0.5"]
+
+[project.scripts]
+wikiwall = "wikiwall.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
