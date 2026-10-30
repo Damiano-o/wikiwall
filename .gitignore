@@ -7,4 +7,4 @@ build/
 dist/
 *.egg-info/
 *.log
-docs/wallpaper.png
+docs/wallpaper*.png
