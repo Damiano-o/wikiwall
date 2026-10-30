@@ -1,5 +1,7 @@
 # WikiWall
 
+[![CI](https://github.com/Damiano-o/wikiwall/actions/workflows/ci.yml/badge.svg)](https://github.com/Damiano-o/wikiwall/actions/workflows/ci.yml)
+
 **Una voce di qualità di Wikipedia in italiano, diversa, sul tuo desktop Windows.**
 
 ![WikiWall](docs/screenshot.jpg)
