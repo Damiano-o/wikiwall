@@ -10,7 +10,7 @@ DEFAULT_TOML = """\
 [wikiwall]
 language = "it"
 theme = "paper"
-interval_minutes = 60
+interval_minutes = 10
 idle_minutes = 5
 desktop_cooldown_minutes = 10
 history_size = 50
@@ -24,7 +24,7 @@ quality_cache_days = 7
 class Config:
     language: str = "it"
     theme: str = "paper"
-    interval_minutes: int = 60
+    interval_minutes: int = 10
     idle_minutes: int = 5
     desktop_cooldown_minutes: int = 10
     history_size: int = 50
@@ -64,7 +64,7 @@ def _config_from_mapping(data: dict) -> Config:
     return Config(
         language=language,
         theme=theme,
-        interval_minutes=_positive(section.get("interval_minutes"), 60),
+        interval_minutes=_positive(section.get("interval_minutes"), 10),
         idle_minutes=_positive(section.get("idle_minutes"), 5),
         desktop_cooldown_minutes=_positive(section.get("desktop_cooldown_minutes"), 10),
         history_size=_positive(section.get("history_size"), 50),

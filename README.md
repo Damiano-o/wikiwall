@@ -13,7 +13,7 @@ Non è un sito web aperto a tutto schermo: è un'immagine pulita e leggibile, pe
 - **Solo voci di qualità**: la lista viene letta da `Wikipedia:Vetrina` e `Wikipedia:Voci di qualità`, non da `Speciale:Random`.
 - **Niente ripetizioni**: le ultime 50 voci vengono evitate.
 - **Più vetrina che qualità**: il 65% delle scelte arriva dalla Vetrina, il resto dalle Voci di qualità.
-- **Aggiornamento automatico**: al login, quando torni da una pausa, quando compare il desktop e ogni 60 minuti.
+- **Aggiornamento automatico**: al login, quando torni da una pausa, quando compare il desktop e ogni 10 minuti.
 - **Tema carta o tema scuro**, con titolo, descrizione, estratto della voce, immagine, QR code e attribuzione.
 - **Fallback offline**: se Wikipedia non risponde, viene riusata l'ultima voce renderizzata.
 - **Icona nella tray** con "Cambia ora", "Apri voce", "Pausa" ed "Esci".
@@ -118,7 +118,7 @@ Esempio:
 theme = "paper"
 
 # Tempo massimo tra due cambi (minuti)
-interval_minutes = 60
+interval_minutes = 10
 
 # Dopo quanti minuti di inattività, il ritorno al computer cambia la voce
 idle_minutes = 5

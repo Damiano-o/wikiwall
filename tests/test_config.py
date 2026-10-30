@@ -29,5 +29,5 @@ def test_invalid_values_fall_back(tmp_path):
     )
     cfg = load_config(path)
     assert cfg.theme == "paper"
-    assert cfg.interval_minutes == 60
+    assert cfg.interval_minutes == 10
     assert cfg.history_size == 50
