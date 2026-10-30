@@ -127,20 +127,25 @@ def test_api_get_retries_on_429(tmp_path, monkeypatch):
     assert client._api_get({"action": "query"}) == {"ok": True}
 
 
-def test_summary_parses_rest_payload(tmp_path):
+def test_summary_parses_api_payload(tmp_path):
     session = FakeSession(
         [
             FakeResponse(
                 {
-                    "title": "La grande onda di Kanagawa",
-                    "description": "xilografia di Katsushika Hokusai",
-                    "extract": "La grande onda di Kanagawa è una xilografia.",
-                    "originalimage": {"source": "https://example.org/onda.jpg"},
-                    "content_urls": {
-                        "desktop": {
-                            "page": "https://it.wikipedia.org/wiki/La_grande_onda_di_Kanagawa"
-                        }
-                    },
+                    "query": {
+                        "pages": [
+                            {
+                                "title": "La grande onda di Kanagawa",
+                                "description": "xilografia di Katsushika Hokusai",
+                                "extract": "La grande onda di Kanagawa è una xilografia.",
+                                "original": {"source": "https://example.org/onda.jpg"},
+                                "fullurl": (
+                                    "https://it.wikipedia.org/wiki/"
+                                    "La_grande_onda_di_Kanagawa"
+                                ),
+                            }
+                        ]
+                    }
                 }
             )
         ]
@@ -170,10 +175,16 @@ def test_random_article_avoids_recent_titles(tmp_path, monkeypatch):
         [
             FakeResponse(
                 {
-                    "title": "C",
-                    "description": "",
-                    "extract": "Testo della voce C.",
-                    "content_urls": {"desktop": {"page": "https://it.wikipedia.org/wiki/C"}},
+                    "query": {
+                        "pages": [
+                            {
+                                "title": "C",
+                                "description": "",
+                                "extract": "Testo della voce C.",
+                                "fullurl": "https://it.wikipedia.org/wiki/C",
+                            }
+                        ]
+                    }
                 }
             )
         ]

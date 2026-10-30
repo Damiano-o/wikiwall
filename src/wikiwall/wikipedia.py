@@ -9,7 +9,7 @@ from dataclasses import asdict, dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
-from urllib.parse import quote
+from urllib.parse import unquote
 
 import requests
 
@@ -86,7 +86,6 @@ class WikipediaClient:
         self.timeout = timeout
         self.cache_days = max(1, cache_days)
         self.api_url = f"https://{language}.wikipedia.org/w/api.php"
-        self.rest_url = f"https://{language}.wikipedia.org/api/rest_v1"
         self.cache_path = (cache_dir or default_cache_dir()) / "quality.json"
         self.session = session or requests.Session()
         self.session.headers.update(
@@ -242,45 +241,45 @@ class WikipediaClient:
         raise WikipediaError(f"Nessuna voce recuperabile: {last_error}")
 
     def summary(self, title: str, quality: str = "") -> Article:
-        slug = quote(title.replace(" ", "_"), safe="")
-        url = f"{self.rest_url}/page/summary/{slug}"
-        try:
-            response = self.session.get(url, timeout=self.timeout)
-        except requests.RequestException as exc:
-            raise WikipediaError(f"Impossibile leggere {title}: {exc}") from exc
-
-        if response.status_code == 404:
+        data = self._api_get(
+            {
+                "action": "query",
+                "prop": "extracts|pageimages|description|info",
+                "exintro": "1",
+                "explaintext": "1",
+                "piprop": "original|thumbnail",
+                "inprop": "url",
+                "redirects": "1",
+                "titles": title,
+                "format": "json",
+                "formatversion": "2",
+                "maxlag": "5",
+            }
+        )
+        pages = (data.get("query") or {}).get("pages") or []
+        if not pages:
             raise ArticleNotFound(f"Voce non trovata: {title}")
-        try:
-            response.raise_for_status()
-        except requests.HTTPError as exc:
-            raise WikipediaError(
-                f"Wikipedia ha risposto {response.status_code} per {title}"
-            ) from exc
 
-        try:
-            data = response.json()
-        except ValueError as exc:
-            raise WikipediaError(f"Risposta non valida per {title}") from exc
+        page = pages[0]
+        if page.get("missing") or page.get("invalid"):
+            raise ArticleNotFound(f"Voce non trovata: {title}")
 
-        extract = str(data.get("extract") or "").strip()
+        extract = str(page.get("extract") or "").strip()
         if not extract:
             raise ArticleNotFound(f"Nessun estratto per {title}")
 
-        original = data.get("originalimage") or {}
-        thumbnail = data.get("thumbnail") or {}
+        original = page.get("original") or {}
+        thumbnail = page.get("thumbnail") or {}
         image_url = original.get("source") or thumbnail.get("source") or None
-        content_urls = data.get("content_urls") or {}
-        desktop = content_urls.get("desktop") or {}
-        page_url = desktop.get("page") or (
-            f"https://{self.language}.wikipedia.org/wiki/{slug}"
+        page_url = page.get("fullurl") or (
+            f"https://{self.language}.wikipedia.org/wiki/{title.replace(' ', '_')}"
         )
 
         return Article(
-            title=str(data.get("title") or title),
-            description=str(data.get("description") or "").strip(),
+            title=str(page.get("title") or title),
+            description=str(page.get("description") or "").strip(),
             extract=extract,
-            url=str(page_url),
+            url=unquote(str(page_url)),
             image_url=str(image_url) if image_url else None,
             quality=quality,
         )
