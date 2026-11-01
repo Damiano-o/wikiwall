@@ -16,14 +16,26 @@ Non è un sito web aperto a tutto schermo: è un'immagine pulita e leggibile, pe
 - **Niente ripetizioni**: le ultime 50 voci vengono evitate.
 - **Più vetrina che qualità**: il 65% delle scelte arriva dalla Vetrina, il resto dalle Voci di qualità.
 - **Aggiornamento automatico**: al login, quando torni da una pausa, quando compare il desktop e ogni 10 minuti.
-- **QR e link cliccabili**: quando la zona non è coperta da altre finestre, il QR e l'indirizzo della voce aprono la pagina su Wikipedia, anche se un'altra applicazione è in primo piano. Il livello interattivo scompare se una finestra copre quella zona.
+- **QR e link cliccabili**: le zone del QR, dell'indirizzo e del pulsante "Salta voce" sono già attive appena compare il desktop, quindi il primo clic arriva sempre. Si nascondono quando un'altra applicazione prende il focus, così non rubano clic alle finestre.
 - **Salta voce**: il pulsante sullo sfondo, la voce nella tray e la scorciatoia `Ctrl+Alt+N` passano subito alla voce successiva.
-- **Tema carta o tema scuro**, con titolo, descrizione, estratto della voce, immagine, QR code e attribuzione.
+- **Tema carta o tema scuro**, con titolo, descrizione, estratto della voce, immagine, QR code e attribuzione. Il QR resta scuro su carta chiara in entrambi i temi, così lo leggono tutti gli scanner.
+- **Cambio tema da terminale**: `wikiwall theme dark --apply` cambia e applica subito.
+- **Un solo processo**: se il watcher è già attivo, un secondo `watch` si ferma subito invece di duplicare overlay e tray.
 - **Tipografia editoriale**: Source Serif 4 per il testo e Montserrat per i dettagli, con un lead più grande e un estratto più breve.
 - **Layout fluido**: si adatta a 1920×1200, 1366×768 e 800×600 senza perdere leggibilità.
 - **Fallback offline**: se Wikipedia non risponde, viene riusata l'ultima voce renderizzata.
 - **Icona nella tray** con "Cambia ora", "Salta voce", "Apri voce", "QR e link cliccabili", "Pausa" ed "Esci".
 - **Nessun servizio esterno**: tutto gira in locale; l'unica rete necessaria è quella verso Wikipedia.
+
+## Novità 0.3.0
+
+- **Clic che funzionano al primo colpo**: le zone cliccabili esistono già appena il desktop è in primo piano, non vengono più create al passaggio del mouse. Prima un clic veloce poteva finire sul desktop e non fare nulla.
+- **Niente più doppioni**: il watcher tiene un lock, quindi due istanze non si contendono overlay, tray e scorciatoia.
+- **Tema scuro rifinito** e QR sempre leggibile: moduli scuri su carta chiara anche con il tema nero.
+- **`wikiwall theme`** per vedere o cambiare tema, con `--apply` per aggiornare subito lo sfondo.
+- **Immagine di copertina**: se la foto della voce non carica, resta l'iniziale invece di un pannello vuoto.
+- **`--no-set`** scrive l'anteprima in `cache/preview.png` e non tocca più lo sfondo attuale.
+- `Ctrl+Alt+N` e "Salta voce" restano reattivi anche durante un cambio in corso.
 
 ## Novità 0.2.1
 
@@ -125,6 +137,8 @@ python -m wikiwall uninstall
 | `python -m wikiwall config --open` | Apre la configurazione in Notepad |
 | `python -m wikiwall history` | Mostra le ultime voci usate |
 | `python -m wikiwall history --clear` | Svuota lo storico |
+| `python -m wikiwall theme` | Mostra il tema attivo |
+| `python -m wikiwall theme dark --apply` | Passa al tema scuro e aggiorna subito lo sfondo |
 | `python -m wikiwall setup` | Installa Chromium per Playwright |
 
 Se hai attivato il virtualenv, puoi usare `wikiwall` al posto di `python -m wikiwall`.
@@ -186,7 +200,7 @@ Dopo una modifica, riavvia `wikiwall watch` (tray → Esci, poi di nuovo `python
 3. **Contenuto**: scarica l'inizio della voce (`prop=extracts`), la descrizione breve, l'immagine principale e l'URL.
 4. **Impaginazione**: costruisce una pagina HTML con CSS, font incorporati, lead, estratto e QR code, e la fotografa con Playwright Chromium alla risoluzione dello schermo.
 5. **Sfondo**: imposta il PNG con `SystemParametersInfoW` e imposta lo stile "Riempi" (`WallpaperStyle=10`).
-6. **Interazione**: un piccolo overlay Tkinter senza cornice copre solo il QR, l'URL e il pulsante "Salta voce". Compare quando il punto non è coperto da altre finestre, anche se un'altra applicazione è in primo piano; usa `WS_EX_NOACTIVATE` per non rubare il focus. Un clic apre il browser o salta la voce.
+6. **Interazione**: un piccolo overlay Tkinter senza cornice copre solo il QR, l'URL e il pulsante "Salta voce". Le zone sono attive finché il desktop è in primo piano e si nascondono quando un'altra applicazione prende il focus; usano `WS_EX_NOACTIVATE` per non rubare il focus. Un clic apre il browser o salta la voce.
 7. **Quando cambia**:
    - all'avvio del watcher (al login);
    - quando il desktop è in primo piano per almeno 3 secondi, con un cooldown configurabile;
@@ -213,7 +227,7 @@ I font sono inclusi nel pacchetto, in `src/wikiwall/assets/fonts/`.
 
 - **Solo Windows**: l'impostazione dello sfondo e l'overlay usano API Win32.
 - **Solo monitor principale**: il PNG viene generato alla risoluzione dello schermo primario. Il supporto multi-monitor non è ancora incluso.
-- **Overlay sopra lo sfondo**: QR, link e pulsante "Salta voce" sono cliccabili quando la zona non è coperta da altre finestre e il watcher è in esecuzione. Non serve che il desktop sia in primo piano; se una finestra copre quella zona, l'overlay si nasconde.
+- **Overlay sopra lo sfondo**: QR, link e pulsante "Salta voce" sono cliccabili quando il desktop è in primo piano e il watcher è in esecuzione. Quando un'applicazione prende il focus le zone si nascondono, per non intercettare i suoi clic.
 - **Hotkey**: se `Ctrl+Alt+N` è occupata da un altro programma, restano disponibili il pulsante sullo sfondo e la tray.
 - **Internet**: la prima volta e a ogni nuova voce serve la rete. Se Wikipedia non risponde, WikiWall riusa l'ultima voce salvata.
 - **Lista di qualità**: se Wikipedia cambia la struttura delle pagine `Wikipedia:Vetrina` o `Wikipedia:Voci di qualità`, il parser potrebbe dover essere aggiornato.
@@ -238,6 +252,7 @@ src/wikiwall/
   watcher.py     ciclo automatico, trigger e interazione
   overlay.py     QR, link e "Salta voce" cliccabili
   hotkey.py      scorciatoia globale Ctrl+Alt+N
+  single_instance.py  lock che impedisce due watcher contemporanei
   tray.py        icona e menu nella tray
   startup.py     avvio automatico al login
   cli.py         comandi da terminale

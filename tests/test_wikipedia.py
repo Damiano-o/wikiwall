@@ -213,3 +213,68 @@ def test_last_article_round_trip(tmp_path):
     )
     client.save_last(article)
     assert client.load_last() == article
+
+
+def test_user_agent_reports_the_package_version():
+    from wikiwall import __version__
+
+    assert f"WikiWall/{__version__}" in wikipedia.USER_AGENT
+
+
+def test_random_article_retries_recent_titles_when_everything_fails(tmp_path, monkeypatch):
+    import random
+
+    client = WikipediaClient(cache_dir=tmp_path, session=FakeSession([]))
+    monkeypatch.setattr(
+        client,
+        "quality_titles",
+        lambda refresh=False: [("A", "vetrina"), ("B", "qualità")],
+    )
+    pools = []
+
+    def fake_first(pool, labels, rng):
+        pools.append(list(pool))
+        if len(pools) == 2:
+            return Article(
+                title="B",
+                description="",
+                extract="Testo di B.",
+                url="https://it.wikipedia.org/wiki/B",
+                image_url=None,
+            )
+        return None
+
+    monkeypatch.setattr(client, "_first_usable", fake_first)
+
+    article = client.random_article(recent=["A"], rng=random.Random(0))
+
+    assert article.title == "B"
+    assert len(pools) == 2
+    assert set(pools[1]) == {"A", "B"}
+
+
+def test_first_usable_skips_broken_titles(tmp_path, monkeypatch):
+    class InOrderRng:
+        def sample(self, pool, count):
+            return list(pool)[:count]
+
+    client = WikipediaClient(cache_dir=tmp_path, session=FakeSession([]))
+    article = Article(
+        title="B",
+        description="",
+        extract="Testo di B.",
+        url="https://it.wikipedia.org/wiki/B",
+        image_url=None,
+    )
+    calls = []
+
+    def fake_summary(title, quality=""):
+        calls.append(title)
+        if title == "A":
+            raise WikipediaError("non disponibile")
+        return article
+
+    monkeypatch.setattr(client, "summary", fake_summary)
+
+    assert client._first_usable(["A", "B"], {"A": "vetrina", "B": "vetrina"}, InOrderRng())
+    assert calls == ["A", "B"]

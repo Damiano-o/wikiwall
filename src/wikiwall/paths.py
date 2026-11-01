@@ -45,6 +45,10 @@ def log_path() -> Path:
     return app_dir() / "wikiwall.log"
 
 
+def lock_path() -> Path:
+    return app_dir() / "wikiwall.lock"
+
+
 def last_article_path() -> Path:
     return cache_dir() / "last_article.json"
 

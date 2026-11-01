@@ -49,57 +49,118 @@ def test_other_windows_are_not_clickable():
     assert not is_clickable_window(None, pid=None, own_pid=456)
 
 
-def test_hotspot_works_even_when_desktop_is_not_foreground(monkeypatch):
-    class FakeRoot:
-        def withdraw(self):
-            pass
+class _FakeRoot:
+    def withdraw(self):
+        pass
 
-        def after(self, _delay, _callback):
-            pass
+    def after(self, _delay, _callback):
+        pass
 
-        def destroy(self):
-            pass
+    def destroy(self):
+        pass
 
+
+class _FakeHotspot:
+    def __init__(self):
+        self.shown = []
+        self.hides = 0
+        self.destroyed = False
+
+    def show(self, box, image=None):
+        self.shown.append((box, image))
+
+    def hide(self):
+        self.hides += 1
+
+    def destroy(self):
+        self.destroyed = True
+
+
+def _overlay_with_fakes(monkeypatch, state, hotspot):
     fake_tk = types.ModuleType("tkinter")
-    fake_tk.Tk = FakeRoot
+    fake_tk.Tk = _FakeRoot
     monkeypatch.setitem(sys.modules, "tkinter", fake_tk)
-
-    class FakeHotspot:
-        def __init__(self):
-            self.shown = []
-
-        def show(self, box, image=None):
-            self.shown.append((box, image))
-
-        def hide(self):
-            pass
-
-        def destroy(self):
-            pass
 
     class FakeWatcher:
         clickable_qr = True
-        current_url = "https://it.wikipedia.org/wiki/Test"
-        current = SimpleNamespace(
-            image_path=Path("wallpaper.png"),
-            theme="paper",
-            qr_box=(10.0, 20.0, 30.0, 40.0),
-            link_box=(10.0, 70.0, 100.0, 20.0),
-            skip_box=(10.0, 100.0, 80.0, 30.0),
-        )
+        current_url = state.article.url
+        current = state
 
-    fake_hotspot = FakeHotspot()
-    overlay_window = overlay._Overlay(FakeWatcher(), threading.Event())
-    monkeypatch.setattr(overlay, "is_desktop_foreground", lambda: False, raising=False)
-    monkeypatch.setattr(overlay, "_cursor_position", lambda: (20, 110))
-    monkeypatch.setattr(overlay_window, "_is_desktop_at", lambda _x, _y: True)
-    monkeypatch.setattr(
-        overlay_window,
-        "_hotspot",
-        lambda _kind, _state: fake_hotspot,
+        def skip_current(self):
+            return True
+
+    window = overlay._Overlay(FakeWatcher(), threading.Event())
+    monkeypatch.setattr(window, "_hotspot", lambda _kind, _state: hotspot)
+    return window
+
+
+def _state(tmp_path, url="https://it.wikipedia.org/wiki/Test"):
+    image = tmp_path / "wallpaper.png"
+    Image.new("RGB", (120, 160), (10, 10, 10)).save(image)
+    return SimpleNamespace(
+        image_path=image,
+        theme="paper",
+        qr_box=(10.0, 20.0, 30.0, 40.0),
+        link_box=(10.0, 70.0, 100.0, 20.0),
+        skip_box=(10.0, 100.0, 80.0, 30.0),
+        article=SimpleNamespace(url=url),
     )
 
-    overlay_window._tick()
 
-    assert fake_hotspot.shown == [((10.0, 100.0, 80.0, 30.0), None)]
-    overlay_window.close()
+def test_hotspots_exist_before_the_pointer_arrives(monkeypatch, tmp_path):
+    state = _state(tmp_path)
+    hotspot = _FakeHotspot()
+    window = _overlay_with_fakes(monkeypatch, state, hotspot)
+    monkeypatch.setattr(overlay, "is_desktop_foreground", lambda: True)
+
+    window._tick()
+
+    assert [box for box, _image in hotspot.shown] == [
+        state.qr_box,
+        state.link_box,
+        state.skip_box,
+    ]
+    assert hotspot.shown[0][1] is not None  # il QR viene ritagliato dallo sfondo
+    window.close()
+
+
+def test_hotspots_hide_when_an_app_takes_the_foreground(monkeypatch, tmp_path):
+    state = _state(tmp_path)
+    hotspot = _FakeHotspot()
+    window = _overlay_with_fakes(monkeypatch, state, hotspot)
+    monkeypatch.setattr(overlay, "is_desktop_foreground", lambda: False)
+
+    window._tick()
+
+    assert hotspot.shown == []
+    window.close()
+
+
+def test_qr_crop_is_cached_between_ticks(monkeypatch, tmp_path):
+    state = _state(tmp_path)
+    hotspot = _FakeHotspot()
+    window = _overlay_with_fakes(monkeypatch, state, hotspot)
+    monkeypatch.setattr(overlay, "is_desktop_foreground", lambda: True)
+
+    window._tick()
+    window._tick()
+
+    assert len(window._crop_cache) == 1
+    first_tick, second_tick = hotspot.shown[:3], hotspot.shown[3:]
+    assert first_tick[0][1] is second_tick[0][1]
+    window.close()
+
+
+def test_a_new_article_invalidates_the_state(monkeypatch, tmp_path):
+    state = _state(tmp_path)
+    hotspot = _FakeHotspot()
+    window = _overlay_with_fakes(monkeypatch, state, hotspot)
+    monkeypatch.setattr(overlay, "is_desktop_foreground", lambda: True)
+
+    window._tick()
+    state.article = SimpleNamespace(url="https://it.wikipedia.org/wiki/Altro")
+    window._tick()
+
+    assert len(hotspot.shown) == 6
+    assert window._state_key == window._state_signature(state)
+    window.close()

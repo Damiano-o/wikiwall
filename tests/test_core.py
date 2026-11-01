@@ -144,3 +144,24 @@ def test_change_raises_without_offline_fallback(monkeypatch):
     app = WikiWall(Config(width=800, height=600), client=client, history=FakeHistory())
     with pytest.raises(WikipediaError):
         app.change(apply=False)
+
+
+def test_preview_without_apply_does_not_overwrite_the_wallpaper(monkeypatch, tmp_path):
+    monkeypatch.setenv("WIKIWALL_HOME", str(tmp_path))
+    client = FakeClient(ARTICLE)
+    history = FakeHistory()
+    destinations = []
+
+    monkeypatch.setattr(
+        core,
+        "render_article",
+        lambda article, out, width, height, theme: (
+            destinations.append(Path(out)) or RenderResult(Path(out), None, None, None)
+        ),
+    )
+    monkeypatch.setattr(core, "set_wallpaper", lambda path: None)
+
+    app = WikiWall(Config(width=800, height=600), client=client, history=history)
+    app.change(apply=False)
+
+    assert destinations == [tmp_path / "cache" / "preview.png"]

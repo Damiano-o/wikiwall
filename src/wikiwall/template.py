@@ -37,16 +37,19 @@ THEMES: dict[str, dict[str, str]] = {
         "rule": "rgba(25, 23, 20, 0.16)",
         "texture": "rgba(25, 23, 20, 0.05)",
         "qr_bg": "#fbf7ef",
+        "qr_ink": "#191714",
     },
     "dark": {
-        "paper": "#121212",
-        "ink": "#f2ede4",
-        "body": "#ddd7cd",
-        "muted": "#a9a196",
-        "accent": "#e0b45c",
-        "rule": "rgba(242, 237, 228, 0.18)",
-        "texture": "rgba(255, 255, 255, 0.04)",
-        "qr_bg": "#18191b",
+        "paper": "#0e0f11",
+        "ink": "#f4efe6",
+        "body": "#d9d3c8",
+        "muted": "#a49c92",
+        "accent": "#e2b45f",
+        "rule": "rgba(244, 239, 230, 0.18)",
+        "texture": "rgba(255, 255, 255, 0.045)",
+        # Il QR resta scuro su carta chiara: così lo leggono tutti gli scanner.
+        "qr_bg": "#f4efe6",
+        "qr_ink": "#14161a",
     },
 }
 
@@ -518,7 +521,7 @@ def _qr_data_uri(url: str, theme: str) -> str:
     code.add_data(url)
     code.make(fit=True)
     image = code.make_image(
-        fill_color=palette["ink"],
+        fill_color=palette.get("qr_ink", palette["ink"]),
         back_color=palette["qr_bg"],
     ).convert("RGB")
     buffer = BytesIO()
@@ -587,13 +590,14 @@ def build_html(
             'alt="" onerror="this.remove()">'
         )
         hero_class = "hero"
-        hero_letter = ""
         hero_caption = '<div class="hero-caption">Immagine dalla voce · Wikipedia</div>'
     else:
         hero_media = ""
         hero_class = "hero no-image"
-        hero_letter = f'<div class="hero-letter">{html.escape(article.title[:1].upper())}</div>'
         hero_caption = ""
+    # L'iniziale resta sotto la foto: se l'immagine non carica viene nascosta
+    # dal gestore onerror e la copertina non resta vuota.
+    hero_letter = f'<div class="hero-letter">{html.escape(article.title[:1].upper())}</div>'
 
     description_html = (
         f'<p class="description">{html.escape(article.description)}</p>'

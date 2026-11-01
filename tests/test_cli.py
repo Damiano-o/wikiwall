@@ -89,3 +89,55 @@ def test_config_open_is_best_effort(monkeypatch, tmp_path):
     assert main(["config", "--open"]) == 0
     assert len(opened) == 1
     assert str(tmp_path / "config.toml") in str(opened[0])
+
+
+def test_theme_parser_accepts_the_known_themes():
+    assert build_parser().parse_args(["theme"]).name is None
+    assert build_parser().parse_args(["theme", "dark"]).name == "dark"
+    assert build_parser().parse_args(["theme", "dark", "--apply"]).apply is True
+
+
+def test_theme_parser_rejects_unknown_themes():
+    with pytest.raises(SystemExit):
+        build_parser().parse_args(["theme", "neon"])
+
+
+def test_theme_command_shows_the_current_theme(monkeypatch, tmp_path, capsys):
+    monkeypatch.setenv("WIKIWALL_HOME", str(tmp_path))
+
+    assert main(["theme"]) == 0
+
+    output = capsys.readouterr().out
+    assert "Tema attuale: paper" in output
+    assert "dark" in output
+
+
+def test_theme_command_saves_the_choice(monkeypatch, tmp_path, capsys):
+    monkeypatch.setenv("WIKIWALL_HOME", str(tmp_path))
+
+    assert main(["theme", "dark"]) == 0
+
+    text = (tmp_path / "config.toml").read_text(encoding="utf-8")
+    assert 'theme = "dark"' in text
+    assert "Tema impostato: dark" in capsys.readouterr().out
+
+
+def test_watch_refuses_a_second_instance(monkeypatch, tmp_path, capsys):
+    monkeypatch.setenv("WIKIWALL_HOME", str(tmp_path))
+
+    class FakeLock:
+        def acquire(self):
+            return False
+
+        def release(self):
+            raise AssertionError("non deve rilasciare un lock mai preso")
+
+    class BoomWatcher:
+        def __init__(self, *_args, **_kwargs):
+            raise AssertionError("il secondo watcher non deve partire")
+
+    monkeypatch.setattr("wikiwall.cli.InstanceLock", FakeLock)
+    monkeypatch.setattr("wikiwall.cli.Watcher", BoomWatcher)
+
+    assert main(["watch"]) == 0
+    assert "già in esecuzione" in capsys.readouterr().out

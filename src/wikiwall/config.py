@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import re
 import tomllib
 from dataclasses import dataclass
 from pathlib import Path
 
 from .paths import atomic_write_text, config_path
+
+THEMES: tuple[str, ...] = ("paper", "dark")
 
 DEFAULT_TOML = """\
 [wikiwall]
@@ -111,4 +114,74 @@ def load_config(path: Path | None = None) -> Config:
     return _config_from_mapping(data)
 
 
-__all__ = ["Config", "DEFAULT_TOML", "load_config", "save_default_config"]
+_THEME_KEY = re.compile(r"^\s*theme\s*=")
+_SECTION = re.compile(r"^\s*\[")
+
+
+def _section_bounds(lines: list[str]) -> tuple[int, int] | None:
+    """Return the (start, end) line range of the [wikiwall] section."""
+    start = None
+    for index, line in enumerate(lines):
+        if line.strip() == "[wikiwall]":
+            start = index
+            break
+    if start is None:
+        return None
+    end = len(lines)
+    for index in range(start + 1, len(lines)):
+        if _SECTION.match(lines[index]):
+            end = index
+            break
+    return start + 1, end
+
+
+def _replace_theme(lines: list[str], start: int, end: int, theme: str) -> bool:
+    for index in range(start, end):
+        if _THEME_KEY.match(lines[index]):
+            prefix = lines[index].split("=", 1)[0].rstrip()
+            lines[index] = f'{prefix} = "{theme}"'
+            return True
+    return False
+
+
+def save_theme(theme: str, path: Path | None = None) -> Path:
+    """Store *theme* in the config file, keeping comments and other keys."""
+    name = theme.strip().lower()
+    if name not in THEMES:
+        raise ValueError(f"Tema sconosciuto: {theme}")
+
+    target = path or config_path()
+    if not target.exists():
+        save_default_config(target)
+    try:
+        lines = target.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        lines = []
+
+    bounds = _section_bounds(lines)
+    if bounds is not None:
+        start, end = bounds
+        if not _replace_theme(lines, start, end, name):
+            lines.insert(start, f'theme = "{name}"')
+    else:
+        top_end = next(
+            (index for index, line in enumerate(lines) if _SECTION.match(line)),
+            len(lines),
+        )
+        if not _replace_theme(lines, 0, top_end, name):
+            if lines and lines[-1].strip():
+                lines.append("")
+            lines.extend(["[wikiwall]", f'theme = "{name}"'])
+
+    atomic_write_text(target, "\n".join(lines).rstrip() + "\n")
+    return target
+
+
+__all__ = [
+    "Config",
+    "DEFAULT_TOML",
+    "THEMES",
+    "load_config",
+    "save_default_config",
+    "save_theme",
+]

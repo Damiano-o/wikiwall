@@ -6,7 +6,7 @@ from pathlib import Path
 
 from .config import Config, load_config
 from .history import History
-from .paths import history_path, wallpaper_path
+from .paths import cache_dir, history_path, wallpaper_path
 from .render import Box, render_article
 from .wallpaper import get_screen_size, set_wallpaper
 from .wikipedia import Article, WikipediaClient, WikipediaError
@@ -63,7 +63,13 @@ class WikiWall:
             LOGGER.warning("Wikipedia non raggiungibile, riuso l'ultima voce: %s", exc)
 
         self.client.save_last(article)
-        destination = Path(output) if output is not None else wallpaper_path()
+        if output is not None:
+            destination = Path(output)
+        elif apply:
+            destination = wallpaper_path()
+        else:
+            # Anteprima: non sovrascrivere il PNG che sta sullo sfondo.
+            destination = cache_dir() / "preview.png"
         rendered = render_article(article, destination, width, height, theme)
 
         if apply:

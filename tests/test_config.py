@@ -43,3 +43,56 @@ def test_invalid_values_fall_back(tmp_path):
     assert cfg.theme == "paper"
     assert cfg.interval_minutes == 10
     assert cfg.history_size == 50
+
+
+def test_save_theme_replaces_the_value_and_keeps_comments(tmp_path):
+    from wikiwall.config import save_theme
+
+    path = tmp_path / "config.toml"
+    path.write_text(
+        '[wikiwall]\n# tema preferito\ntheme = "paper"\ninterval_minutes = 5\n',
+        encoding="utf-8",
+    )
+
+    save_theme("dark", path)
+
+    text = path.read_text(encoding="utf-8")
+    assert 'theme = "dark"' in text
+    assert "# tema preferito" in text
+    assert "interval_minutes = 5" in text
+    assert load_config(path).theme == "dark"
+
+
+def test_save_theme_adds_the_key_inside_the_section(tmp_path):
+    from wikiwall.config import save_theme
+
+    path = tmp_path / "config.toml"
+    path.write_text("[wikiwall]\ninterval_minutes = 5\n", encoding="utf-8")
+
+    save_theme("dark", path)
+
+    assert load_config(path).theme == "dark"
+    assert load_config(path).interval_minutes == 5
+
+
+def test_save_theme_creates_the_section_when_missing(tmp_path):
+    from wikiwall.config import save_theme
+
+    path = tmp_path / "config.toml"
+    path.write_text('language = "it"\n', encoding="utf-8")
+
+    save_theme("dark", path)
+
+    text = path.read_text(encoding="utf-8")
+    assert "[wikiwall]" in text
+    assert 'language = "it"' in text
+    assert load_config(path).theme == "dark"
+
+
+def test_save_theme_rejects_unknown_themes(tmp_path):
+    import pytest
+
+    from wikiwall.config import save_theme
+
+    with pytest.raises(ValueError):
+        save_theme("neon", tmp_path / "config.toml")

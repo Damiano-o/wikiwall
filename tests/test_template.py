@@ -223,5 +223,29 @@ def test_image_article_uses_img_tag():
 
 def test_dark_theme_uses_dark_palette():
     markup = build_html(make_article(), 1920, 1200, theme="dark")
-    assert "--paper: #121212" in markup
-    assert "--ink: #f2ede4" in markup
+    assert "--paper: #0e0f11" in markup
+    assert "--ink: #f4efe6" in markup
+    assert "--accent: #e2b45f" in markup
+
+
+def test_dark_theme_keeps_a_light_qr_card():
+    """Sul fondo scuro il QR resta scuro su carta chiara: lo leggono tutti i lettori."""
+    dark = build_html(make_article(), 1920, 1200, theme="dark")
+    paper = build_html(make_article(), 1920, 1200, theme="paper")
+    assert "--qr-bg: #f4efe6" in dark
+    assert "--qr-bg: #fbf7ef" in paper
+    assert "data:image/png;base64," in dark
+    assert dark.count("data:image/png;base64,") == paper.count("data:image/png;base64,")
+
+
+def test_the_hero_keeps_a_fallback_letter_under_the_image():
+    markup = build_html(make_article(), 1920, 1200)
+    assert "hero-letter" in markup
+    assert 'class="hero-img"' in markup
+
+
+def test_both_themes_are_available():
+    from wikiwall.config import THEMES as CONFIG_THEMES
+    from wikiwall.template import THEMES
+
+    assert tuple(THEMES) == CONFIG_THEMES

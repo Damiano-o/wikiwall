@@ -13,15 +13,17 @@ from urllib.parse import quote, unquote
 
 import requests
 
+from . import __version__
 from .paths import atomic_write_text
 from .paths import cache_dir as default_cache_dir
 
 LOGGER = logging.getLogger(__name__)
 
 USER_AGENT = (
-    "WikiWall/0.1 (https://github.com/Damiano-o/wikiwall; "
+    f"WikiWall/{__version__} (https://github.com/Damiano-o/wikiwall; "
     "contact: Damiano-o@users.noreply.github.com)"
 )
+MAX_CANDIDATE_ATTEMPTS = 12
 
 QUALITY_SOURCES: tuple[tuple[str, str], ...] = (
     ("vetrina", "Wikipedia:Vetrina"),
@@ -227,18 +229,33 @@ class WikipediaClient:
             pool = vetrina or qualita
 
         labels = dict(candidates)
-        last_error: object = "nessun candidato"
-        for title in rng.sample(pool, min(5, len(pool))):
+        article = self._first_usable(pool, labels, rng)
+        if article is None and len(candidates) < len(items):
+            # Ogni voce recente è stata esclusa: meglio ripetere una vecchia che niente.
+            labels = dict(items)
+            article = self._first_usable([title for title, _ in items], labels, rng)
+        if article is not None:
+            return article
+
+        raise WikipediaError("Nessuna voce recuperabile: estrazione non disponibile")
+
+    def _first_usable(
+        self,
+        pool: Sequence[str],
+        labels: dict[str, str],
+        rng: random.Random,
+    ) -> Article | None:
+        """Return the first title of *pool* that yields a usable summary."""
+        attempts = min(MAX_CANDIDATE_ATTEMPTS, len(pool))
+        for title in rng.sample(list(pool), attempts):
             try:
                 article = self.summary(title, labels.get(title, ""))
             except WikipediaError as exc:
-                last_error = exc
                 LOGGER.warning("Voce %s non disponibile: %s", title, exc)
                 continue
             if article.extract:
                 return article
-
-        raise WikipediaError(f"Nessuna voce recuperabile: {last_error}")
+        return None
 
     def summary(self, title: str, quality: str = "") -> Article:
         data = self._api_get(

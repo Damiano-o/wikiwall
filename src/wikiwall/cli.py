@@ -10,12 +10,12 @@ from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
 from . import __version__
-from .config import load_config, save_default_config
+from .config import THEMES, load_config, save_default_config, save_theme
 from .core import WikiWall
 from .history import History
 from .paths import config_path, history_path, log_path
+from .single_instance import InstanceLock
 from .startup import StartupError, install_startup, uninstall_startup
-from .template import THEMES
 from .watcher import Watcher
 
 LOGGER = logging.getLogger(__name__)
@@ -71,6 +71,14 @@ def build_parser() -> argparse.ArgumentParser:
 
     history = sub.add_parser("history", help="Mostra le ultime voci usate")
     history.add_argument("--clear", action="store_true", help="Svuota lo storico")
+
+    theme = sub.add_parser("theme", help="Mostra o cambia il tema")
+    theme.add_argument("name", nargs="?", choices=list(THEMES), help="paper o dark")
+    theme.add_argument(
+        "--apply",
+        action="store_true",
+        help="Applica subito il nuovo tema allo sfondo",
+    )
 
     sub.add_parser("setup", help="Installa Chromium per Playwright")
     return parser
@@ -128,6 +136,11 @@ def cmd_next(args: argparse.Namespace) -> int:
 
 
 def cmd_watch(args: argparse.Namespace) -> int:
+    lock = InstanceLock()
+    if not lock.acquire():
+        print("WikiWall è già in esecuzione: nessun secondo watcher avviato.")
+        return 0
+
     watcher = Watcher(WikiWall(load_config()))
     try:
         watcher.run(
@@ -136,6 +149,8 @@ def cmd_watch(args: argparse.Namespace) -> int:
         )
     except KeyboardInterrupt:
         watcher.stop()
+    finally:
+        lock.release()
     return 0
 
 
@@ -193,6 +208,25 @@ def cmd_history(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_theme(args: argparse.Namespace) -> int:
+    config = load_config()
+    if args.name is None:
+        print(f"Tema attuale: {config.theme}")
+        print("Temi disponibili: " + ", ".join(THEMES))
+        return 0
+
+    path = save_theme(args.name)
+    print(f"Tema impostato: {args.name} ({path})")
+    if not args.apply:
+        print("Verrà usato al prossimo cambio. Per applicarlo subito: --apply")
+        return 0
+
+    app = WikiWall(load_config())
+    result = app.change(theme=args.name)
+    print(f"Sfondo aggiornato: {result.article.title}")
+    return 0
+
+
 def cmd_setup(args: argparse.Namespace) -> int:
     print("Installo Chromium per Playwright...")
     result = subprocess.run(
@@ -213,6 +247,7 @@ COMMANDS = {
     "uninstall": cmd_uninstall,
     "config": cmd_config,
     "history": cmd_history,
+    "theme": cmd_theme,
     "setup": cmd_setup,
 }
 

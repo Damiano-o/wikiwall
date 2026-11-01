@@ -9,9 +9,9 @@ from ctypes import wintypes
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from PIL import Image
+from PIL import Image, ImageDraw
 
-from .wallpaper import IS_WINDOWS
+from .wallpaper import IS_WINDOWS, is_desktop_foreground
 
 if TYPE_CHECKING:
     from .watcher import Watcher
@@ -20,7 +20,6 @@ LOGGER = logging.getLogger(__name__)
 
 Box = tuple[float, float, float, float]
 DESKTOP_CLASSES = {"Progman", "WorkerW", "SHELLDLL_DefView", "SysListView32"}
-LVM_HITTEST = 0x1012
 
 GWL_EXSTYLE = -20
 WS_EX_NOACTIVATE = 0x08000000
@@ -30,16 +29,6 @@ SW_SHOWNOACTIVATE = 4
 HWND_TOPMOST = -1
 SWP_NOACTIVATE = 0x0010
 SWP_SHOWWINDOW = 0x0040
-
-class _LVHITTESTINFO(ctypes.Structure):
-    _fields_ = [
-        ("pt", wintypes.POINT),
-        ("flags", wintypes.UINT),
-        ("iItem", ctypes.c_int),
-        ("iSubItem", ctypes.c_int),
-        ("iGroup", ctypes.c_int),
-    ]
-
 
 _USER32: Any | None = None
 
@@ -76,18 +65,6 @@ def _user32() -> Any:
         user32.SetWindowPos.restype = wintypes.BOOL
         user32.ShowWindow.argtypes = [wintypes.HWND, ctypes.c_int]
         user32.ShowWindow.restype = wintypes.BOOL
-        user32.ScreenToClient.argtypes = [
-            wintypes.HWND,
-            ctypes.POINTER(wintypes.POINT),
-        ]
-        user32.ScreenToClient.restype = wintypes.BOOL
-        user32.SendMessageW.argtypes = [
-            wintypes.HWND,
-            wintypes.UINT,
-            wintypes.WPARAM,
-            wintypes.LPARAM,
-        ]
-        user32.SendMessageW.restype = ctypes.c_ssize_t
         _USER32 = user32
     return _USER32
 
@@ -149,39 +126,6 @@ def _window_at(x: int, y: int) -> int:
         return int(hwnd or 0)
     except Exception:  # noqa: BLE001
         return 0
-
-
-def _cursor_position() -> tuple[int, int] | None:
-    if not IS_WINDOWS:
-        return None
-    try:
-        point = wintypes.POINT()
-        if not _user32().GetCursorPos(ctypes.byref(point)):
-            return None
-        return int(point.x), int(point.y)
-    except Exception:  # noqa: BLE001
-        return None
-
-
-def _desktop_icon_at(hwnd: int, x: int, y: int) -> bool:
-    """True when the point is over an icon in the desktop list view."""
-    if not IS_WINDOWS or not hwnd:
-        return False
-    try:
-        user32 = _user32()
-        point = wintypes.POINT(x, y)
-        user32.ScreenToClient(wintypes.HWND(hwnd), ctypes.byref(point))
-        info = _LVHITTESTINFO()
-        info.pt = point
-        result = user32.SendMessageW(
-            wintypes.HWND(hwnd),
-            LVM_HITTEST,
-            0,
-            ctypes.byref(info),
-        )
-        return int(result) != -1 and info.iItem >= 0
-    except Exception:  # noqa: BLE001 - icon probing is best effort
-        return False
 
 
 def _enable_dpi_awareness() -> None:
@@ -289,36 +233,69 @@ class _Hotspot:
         self.hwnd = int(self.window.wm_frame(), 16)
         _set_no_activate(self.hwnd)
         self._photo: Any = None
+        self._image: Image.Image | None = None
+        self._geometry: tuple[int, int, int, int] | None = None
+        self._visible = False
+        self._hover = False
         self.window.bind("<Button-1>", self._click)
+        self.window.bind("<Enter>", self._enter)
+        self.window.bind("<Leave>", self._leave)
 
     def _click(self, _event: Any = None) -> None:
         LOGGER.info("Click sull'hotspot %s", self.kind)
         self.callback()
 
-    def show(self, box: Box, image: Image.Image | None = None) -> None:
-        x, y, width, height = (int(round(value)) for value in box)
-        LOGGER.debug("Mostro hotspot %s hwnd=%s box=%s", self.kind, self.hwnd, box)
-        self.window.geometry(f"{width}x{height}+{x}+{y}")
-        self.canvas.configure(width=width, height=height)
-        if self.kind == "qr" and image is not None:
-            from PIL import ImageTk
+    def _enter(self, _event: Any = None) -> None:
+        if self.kind == "qr" and not self._hover:
+            self._hover = True
+            self._paint()
 
-            self._photo = ImageTk.PhotoImage(image)
-            self.canvas.delete("all")
-            self.canvas.create_image(0, 0, anchor="nw", image=self._photo)
-            self.canvas.create_rectangle(
-                1,
-                1,
-                width - 1,
-                height - 1,
+    def _leave(self, _event: Any = None) -> None:
+        if self.kind == "qr" and self._hover:
+            self._hover = False
+            self._paint()
+
+    def _paint(self) -> None:
+        """Draw the QR crop, with the accent frame only while hovering."""
+        if self.kind != "qr" or self._image is None:
+            return
+        from PIL import ImageTk
+
+        image = self._image
+        if self._hover:
+            image = image.copy()
+            draw = ImageDraw.Draw(image)
+            draw.rectangle(
+                (1, 1, image.width - 2, image.height - 2),
                 outline=self.accent,
                 width=2,
             )
-        self.window.update_idletasks()
-        _show_no_activate(self.hwnd, (x, y, width, height))
+        self._photo = ImageTk.PhotoImage(image)
+        self.canvas.delete("all")
+        self.canvas.create_image(0, 0, anchor="nw", image=self._photo)
+
+    def show(self, box: Box, image: Image.Image | None = None) -> None:
+        """Place the hotspot; repeated calls with the same box are cheap."""
+        x, y, width, height = (int(round(value)) for value in box)
+        if image is not None and image is not self._image:
+            self._image = image
+            self._paint()
+        geometry = (x, y, width, height)
+        if geometry != self._geometry:
+            LOGGER.debug("Mostro hotspot %s hwnd=%s box=%s", self.kind, self.hwnd, box)
+            self.window.geometry(f"{width}x{height}+{x}+{y}")
+            self.canvas.configure(width=width, height=height)
+            self._geometry = geometry
+            self.window.update_idletasks()
+        if not self._visible:
+            _show_no_activate(self.hwnd, (x, y, width, height))
+            self._visible = True
 
     def hide(self) -> None:
+        if not self._visible:
+            return
         _hide_window(self.hwnd)
+        self._visible = False
 
     def destroy(self) -> None:
         try:
@@ -340,6 +317,7 @@ class _Overlay:
         self.root.withdraw()
         self._hotspots: dict[str, _Hotspot] = {}
         self._visible: str | None = None
+        self._crop_cache: dict[Box, Image.Image] = {}
         self._state_key: tuple[Any, ...] | None = None
         self.root.after(80, self._tick)
 
@@ -347,12 +325,14 @@ class _Overlay:
         return self.watcher.current
 
     def _state_signature(self, state: Any) -> tuple[Any, ...]:
+        article = getattr(state, "article", None)
         return (
-            state.image_path,
-            state.theme,
-            state.qr_box,
-            state.link_box,
-            state.skip_box,
+            getattr(state, "image_path", None),
+            getattr(state, "theme", None),
+            getattr(state, "qr_box", None),
+            getattr(state, "link_box", None),
+            getattr(state, "skip_box", None),
+            getattr(article, "url", None),
         )
 
     def _hide_all(self) -> None:
@@ -396,12 +376,47 @@ class _Overlay:
         ).start()
 
     def _is_desktop_at(self, x: int, y: int) -> bool:
+        """True when the desktop (or our own overlay) is what you see at x, y.
+
+        The desktop icon list view is probed with WindowFromPoint only: the
+        list view messages that would tell us whether an icon sits there are
+        WM_USER based, and sending a pointer to another process is unsafe.
+        """
         hwnd = _window_at(x, y)
-        class_name = _window_class(hwnd)
-        pid = _window_pid(hwnd)
-        if class_name == "SysListView32" and pid != os.getpid():
-            return not _desktop_icon_at(hwnd, x, y)
-        return is_clickable_window(class_name, pid, os.getpid())
+        return is_clickable_window(_window_class(hwnd), _window_pid(hwnd), os.getpid())
+
+    def _crop(self, state: Any, box: Box) -> Image.Image | None:
+        cached = self._crop_cache.get(box)
+        if cached is not None:
+            return cached
+        try:
+            image = crop_box(state.image_path, box)
+        except Exception:  # noqa: BLE001 - the wallpaper may be unreadable mid-write
+            LOGGER.debug("Impossibile ritagliare il QR dallo sfondo", exc_info=True)
+            return None
+        self._crop_cache[box] = image
+        return image
+
+    def _sync(self, state: Any) -> None:
+        """Keep one always-visible hotspot per clickable element.
+
+        Showing them all the time removes the race that made fast clicks land
+        on the desktop: the windows are already there when the mouse arrives.
+        """
+        shown: list[str] = []
+        for kind in ("qr", "link", "skip"):
+            box = getattr(state, f"{kind}_box", None)
+            if box is None:
+                continue
+            hotspot = self._hotspot(kind, state)
+            if hotspot is None:
+                continue
+            hotspot.show(box, self._crop(state, box) if kind == "qr" else None)
+            shown.append(kind)
+        for kind, hotspot in self._hotspots.items():
+            if kind not in shown:
+                hotspot.hide()
+        self._visible = ",".join(shown) or None
 
     def _tick(self) -> None:
         if self.stop_event.is_set():
@@ -409,47 +424,16 @@ class _Overlay:
             return
 
         try:
-            if not self.watcher.clickable_qr:
-                self._hide_all()
-                self.root.after(120, self._tick)
-                return
-
             state = self._current_state()
-            if state is None:
+            if not self.watcher.clickable_qr or state is None or not is_desktop_foreground():
                 self._hide_all()
-                self.root.after(120, self._tick)
-                return
-
-            signature = self._state_signature(state)
-            if self._state_key != signature:
-                self._hide_all()
-                self._state_key = signature
-
-            cursor = _cursor_position()
-            if cursor is None:
-                self._hide_all()
-                self.root.after(120, self._tick)
-                return
-
-            x, y = cursor
-            target = None
-            for kind in ("qr", "link", "skip"):
-                box = getattr(state, f"{kind}_box", None)
-                if box is not None and box_contains(box, x, y, margin=3):
-                    target = kind
-                    break
-
-            if target is None:
-                self._hide_all()
-            elif target != self._visible:
-                self._hide_all()
-                if self._is_desktop_at(x, y):
-                    hotspot = self._hotspot(target, state)
-                    if hotspot is not None:
-                        box = getattr(state, f"{target}_box")
-                        image = crop_box(state.image_path, box) if target == "qr" else None
-                        hotspot.show(box, image)
-                        self._visible = target
+            else:
+                signature = self._state_signature(state)
+                if self._state_key != signature:
+                    self._hide_all()
+                    self._crop_cache.clear()
+                    self._state_key = signature
+                self._sync(state)
         except Exception:  # noqa: BLE001 - the overlay must never kill the watcher
             LOGGER.exception("Errore nell'overlay cliccabile")
             self._hide_all()
