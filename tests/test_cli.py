@@ -141,3 +141,44 @@ def test_watch_refuses_a_second_instance(monkeypatch, tmp_path, capsys):
 
     assert main(["watch"]) == 0
     assert "già in esecuzione" in capsys.readouterr().out
+
+
+def test_off_persists_state(monkeypatch, tmp_path, capsys):
+    from wikiwall.state import load_state, state_path
+
+    monkeypatch.setenv("WIKIWALL_HOME", str(tmp_path))
+    assert main(["off"]) == 0
+    assert "spento" in capsys.readouterr().out
+    assert load_state(state_path()).enabled is False
+
+
+def test_status_reflects_state(monkeypatch, tmp_path, capsys):
+    monkeypatch.setenv("WIKIWALL_HOME", str(tmp_path))
+    assert main(["off"]) == 0
+    capsys.readouterr()
+    assert main(["status"]) == 0
+    output = capsys.readouterr().out
+    assert "WikiWall: spento" in output
+    assert "Watcher:" in output
+
+
+def test_on_after_off_and_toggle(monkeypatch, tmp_path, capsys):
+    from wikiwall.state import load_state, state_path
+
+    monkeypatch.setenv("WIKIWALL_HOME", str(tmp_path))
+    assert main(["off"]) == 0
+    assert main(["on"]) == 0
+    assert load_state(state_path()).enabled is True
+    assert main(["toggle"]) == 0
+    assert load_state(state_path()).enabled is False
+
+
+def test_on_when_already_on(monkeypatch, tmp_path, capsys):
+    monkeypatch.setenv("WIKIWALL_HOME", str(tmp_path))
+    assert main(["on"]) == 0
+    assert "già acceso" in capsys.readouterr().out
+
+
+def test_parser_switch_commands():
+    for command in ("on", "off", "toggle", "status"):
+        assert build_parser().parse_args([command]).command == command

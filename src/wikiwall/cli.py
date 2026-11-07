@@ -5,6 +5,7 @@ import logging
 import os
 import subprocess
 import sys
+import time
 import webbrowser
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
@@ -13,9 +14,10 @@ from . import __version__
 from .config import THEMES, load_config, save_default_config, save_theme
 from .core import WikiWall
 from .history import History
-from .paths import config_path, history_path, log_path
-from .single_instance import InstanceLock
+from .paths import config_path, history_path, log_path, state_path
+from .single_instance import InstanceLock, watcher_running
 from .startup import StartupError, install_startup, uninstall_startup
+from .state import State, load_state, save_state
 from .watcher import Watcher
 
 LOGGER = logging.getLogger(__name__)
@@ -65,6 +67,11 @@ def build_parser() -> argparse.ArgumentParser:
 
     sub.add_parser("install", help="Avvia WikiWall automaticamente al login")
     sub.add_parser("uninstall", help="Rimuove l'avvio automatico")
+
+    sub.add_parser("on", help="Accendi WikiWall e tieni il cambio sfondo attivo")
+    sub.add_parser("off", help="Spegni WikiWall e lascia lo sfondo attuale")
+    sub.add_parser("toggle", help="Inverti lo stato di WikiWall")
+    sub.add_parser("status", help="Mostra se WikiWall è acceso")
 
     config = sub.add_parser("config", help="Mostra il file di configurazione")
     config.add_argument("--open", action="store_true", help="Apri il file in Notepad")
@@ -175,6 +182,52 @@ def cmd_uninstall(args: argparse.Namespace) -> int:
     return 0
 
 
+def _report_switch(enabled: bool) -> int:
+    running = watcher_running()
+    if enabled:
+        print("WikiWall acceso: tornerà a cambiare lo sfondo.")
+    else:
+        print("WikiWall spento: lo sfondo resta quello attuale.")
+    if running:
+        print("Il watcher in esecuzione si adegua entro pochi secondi.")
+    else:
+        print("La scelta è salvata e vale al prossimo avvio di `wikiwall watch`.")
+    return 0
+
+
+def _switch(enabled: bool) -> int:
+    path = save_state(State(enabled=enabled, updated=time.time()))
+    LOGGER.debug("Stato salvato in %s: %s", path, "acceso" if enabled else "spento")
+    return _report_switch(enabled)
+
+
+def cmd_on(args: argparse.Namespace) -> int:
+    if load_state().enabled:
+        print("WikiWall è già acceso.")
+        return 0
+    return _switch(True)
+
+
+def cmd_off(args: argparse.Namespace) -> int:
+    if not load_state().enabled:
+        print("WikiWall è già spento.")
+        return 0
+    return _switch(False)
+
+
+def cmd_toggle(args: argparse.Namespace) -> int:
+    return _switch(not load_state().enabled)
+
+
+def cmd_status(args: argparse.Namespace) -> int:
+    state = load_state()
+    running = watcher_running()
+    print(f"WikiWall: {state.describe()}")
+    print(f"Watcher: {'in esecuzione' if running else 'non in esecuzione'}")
+    print(f"Stato salvato in: {state_path()}")
+    return 0
+
+
 def cmd_config(args: argparse.Namespace) -> int:
     path = config_path()
     if not path.exists():
@@ -245,6 +298,10 @@ COMMANDS = {
     "watch": cmd_watch,
     "install": cmd_install,
     "uninstall": cmd_uninstall,
+    "on": cmd_on,
+    "off": cmd_off,
+    "toggle": cmd_toggle,
+    "status": cmd_status,
     "config": cmd_config,
     "history": cmd_history,
     "theme": cmd_theme,

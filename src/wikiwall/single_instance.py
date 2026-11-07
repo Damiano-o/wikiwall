@@ -92,4 +92,13 @@ class InstanceLock:
             fcntl.flock(handle.fileno(), fcntl.LOCK_UN)
 
 
-__all__ = ["InstanceLock"]
+__all__ = ["InstanceLock", "watcher_running"]
+
+
+def watcher_running() -> bool:
+    """True when another process already owns the watcher lock."""
+    lock = InstanceLock()
+    if not lock.acquire():
+        return True
+    lock.release()
+    return False

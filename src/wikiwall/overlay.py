@@ -425,7 +425,12 @@ class _Overlay:
 
         try:
             state = self._current_state()
-            if not self.watcher.clickable_qr or state is None or not is_desktop_foreground():
+            if (
+                not self.watcher.clickable_qr
+                or not getattr(self.watcher, "enabled", True)
+                or state is None
+                or not is_desktop_foreground()
+            ):
                 self._hide_all()
             else:
                 signature = self._state_signature(state)

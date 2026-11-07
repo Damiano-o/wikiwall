@@ -165,6 +165,10 @@ def test_start_and_stop_interaction(monkeypatch):
             self.callback = callback
             self.started = False
             self.stopped = False
+            self.extra = []
+
+        def add(self, hotkey_id, modifiers, vk, callback):
+            self.extra.append((hotkey_id, modifiers, vk, callback))
 
         def start(self):
             self.started = True
@@ -191,6 +195,7 @@ def test_start_and_stop_interaction(monkeypatch):
     watcher.stop_interaction()
     assert overlay_stopped.wait(1)
     assert hotkey.stopped is True
+    assert hotkey.extra and hotkey.extra[0][3] == watcher.toggle_enabled_async
 
 
 def test_skip_async_runs_in_background(monkeypatch):
@@ -219,3 +224,62 @@ def test_run_starts_and_stops_interaction(monkeypatch):
     watcher.run(with_tray=False, with_overlay=False)
 
     assert events == ["start", "stop"]
+
+
+def test_switch_off_blocks_triggers_and_persists(tmp_path):
+    state_file = tmp_path / "state.json"
+    watcher = Watcher(
+        FakeApp(),
+        interval_minutes=60,
+        idle_minutes=5,
+        desktop_cooldown_minutes=10,
+        state_file=state_file,
+    )
+    watcher._load_state()
+    watcher.last_change = 0.0
+
+    assert watcher.toggle_enabled() is False
+    assert watcher.enabled is False
+    assert watcher.paused is True
+    assert watcher.should_change(3600.0, 0.0, False) is None
+
+    from wikiwall.state import load_state
+
+    assert load_state(state_file).enabled is False
+
+    assert watcher.toggle_enabled() is True
+    assert watcher.should_change(3601.0, 0.0, False) == "intervallo"
+
+
+def test_poll_state_follows_external_switch(tmp_path):
+    from wikiwall.state import State, save_state
+
+    state_file = tmp_path / "state.json"
+    save_state(State(enabled=True, updated=1.0), state_file)
+    watcher = Watcher(FakeApp(), state_file=state_file)
+    watcher._load_state()
+    assert watcher.enabled is True
+
+    save_state(State(enabled=False, updated=2.0), state_file)
+    watcher._poll_state()
+
+    assert watcher.enabled is False
+
+
+def test_run_respects_saved_off_state(tmp_path, monkeypatch):
+    from wikiwall.state import State, save_state
+
+    state_file = tmp_path / "state.json"
+    save_state(State(enabled=False, updated=1.0), state_file)
+    watcher = Watcher(FakeApp(), state_file=state_file)
+    changes = []
+    monkeypatch.setattr(watcher, "start_interaction", lambda **kwargs: None)
+    monkeypatch.setattr(watcher, "stop_interaction", lambda: None)
+    monkeypatch.setattr("wikiwall.watcher.get_idle_seconds", lambda: 0.0)
+    monkeypatch.setattr("wikiwall.watcher.is_desktop_foreground", lambda: True)
+    monkeypatch.setattr(watcher, "should_change", lambda *a: changes.append(a) or None)
+    monkeypatch.setattr(watcher, "_stop", type("S", (), {"is_set": lambda self: True})())
+
+    watcher.run(with_tray=False, with_overlay=False)
+
+    assert watcher.enabled is False

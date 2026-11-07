@@ -18,16 +18,22 @@ Non è un sito web aperto a tutto schermo: è un'immagine pulita e leggibile, pe
 - **Aggiornamento automatico**: al login, quando torni da una pausa, quando compare il desktop e ogni 10 minuti.
 - **QR e link cliccabili**: le zone del QR, dell'indirizzo e del pulsante "Salta voce" sono già attive appena compare il desktop, quindi il primo clic arriva sempre. Si nascondono quando un'altra applicazione prende il focus, così non rubano clic alle finestre.
 - **Salta voce**: il pulsante sullo sfondo, la voce nella tray e la scorciatoia `Ctrl+Alt+N` passano subito alla voce successiva.
+- **Interruttore acceso/spento**: "Spegni WikiWall" nella tray (o `wikiwall off`) ferma ogni cambio e lascia lo sfondo che hai in quel momento; "Accendi WikiWall" lo riattiva. La scelta resta salvata anche dopo un riavvio.
 - **Tema carta o tema scuro**, con titolo, descrizione, estratto della voce, immagine, QR code e attribuzione. Il QR resta scuro su carta chiara in entrambi i temi, così lo leggono tutti gli scanner.
 - **Cambio tema da terminale**: `wikiwall theme dark --apply` cambia e applica subito.
 - **Un solo processo**: se il watcher è già attivo, un secondo `watch` si ferma subito invece di duplicare overlay e tray.
 - **Tipografia editoriale**: Source Serif 4 per il testo e Montserrat per i dettagli, con un lead più grande e un estratto più breve.
 - **Layout fluido**: si adatta a 1920×1200, 1366×768 e 800×600 senza perdere leggibilità.
 - **Fallback offline**: se Wikipedia non risponde, viene riusata l'ultima voce renderizzata.
-- **Icona nella tray** con "Cambia ora", "Salta voce", "Apri voce", "QR e link cliccabili", "Pausa" ed "Esci".
+- **Icona nella tray** con "Cambia ora", "Salta voce", "Apri voce", "QR e link cliccabili", l'interruttore acceso/spento ed "Esci". Quando è spento, l'icona diventa grigia.
 - **Nessun servizio esterno**: tutto gira in locale; l'unica rete necessaria è quella verso Wikipedia.
 
-## Novità 0.3.0
+## Novità 0.4.0
+
+- **Pulsante per accendere e spegnere WikiWall**: la voce nella tray diventa "Spegni WikiWall" / "Accendi WikiWall", l'icona si spegne e il menu grigia le azioni non disponibili. Da terminale: `wikiwall off`, `wikiwall on`, `wikiwall toggle`, `wikiwall status`.
+- **Lo stato sopravvive al riavvio**: la scelta è in `state.json`, quindi se spegni WikiWall non riparte al login finché non lo riaccendi.
+- **Quando è spento lo sfondo resta tuo**: nessun cambio automatico e nessun QR cliccabile sopra l'immagine; il watcher continua a girare in tray per riaccendersi al volo.
+- **Scorciatoia `Ctrl+Alt+O`** per accendere e spegnere senza aprire la tray. Se è occupata, WikiWall lo segnala e continua con le altre due.
 
 - **Clic che funzionano al primo colpo**: le zone cliccabili esistono già appena il desktop è in primo piano, non vengono più create al passaggio del mouse. Prima un clic veloce poteva finire sul desktop e non fare nulla.
 - **Niente più doppioni**: il watcher tiene un lock, quindi due istanze non si contendono overlay, tray e scorciatoia.
@@ -112,7 +118,17 @@ Crea `%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\WikiWall.vbs`, che
 python -m wikiwall watch
 ```
 
-L'icona nella tray permette di cambiare subito la voce, saltarla, aprirla nel browser, disattivare il QR cliccabile, mettere in pausa il watcher o uscire.
+L'icona nella tray permette di cambiare subito la voce, saltarla, aprirla nel browser, disattivare il QR cliccabile, spegnere o accendere WikiWall, o uscire. Per congelare lo sfondo che hai scelto:
+
+```powershell
+python -m wikiwall off
+```
+
+Il watcher continua a girare in tray, ma non tocca più lo sfondo. Per riprendere:
+
+```powershell
+python -m wikiwall on
+```
 
 Per rimuovere l'avvio automatico:
 
@@ -140,6 +156,10 @@ python -m wikiwall uninstall
 | `python -m wikiwall theme` | Mostra il tema attivo |
 | `python -m wikiwall theme dark --apply` | Passa al tema scuro e aggiorna subito lo sfondo |
 | `python -m wikiwall setup` | Installa Chromium per Playwright |
+| `python -m wikiwall off` | Spegne WikiWall e lascia lo sfondo attuale |
+| `python -m wikiwall on` | Riaccende WikiWall |
+| `python -m wikiwall toggle` | Inverte lo stato |
+| `python -m wikiwall status` | Mostra se WikiWall è acceso e se il watcher gira |
 
 Se hai attivato il virtualenv, puoi usare `wikiwall` al posto di `python -m wikiwall`.
 
@@ -148,6 +168,7 @@ Se hai attivato il virtualenv, puoi usare `wikiwall` al posto di `python -m wiki
 | Scorciatoia | Azione |
 | --- | --- |
 | `Ctrl+Alt+N` | Salta alla voce successiva |
+| `Ctrl+Alt+O` | Accende o spegne WikiWall |
 | Clic sul QR | Apre la voce su Wikipedia |
 | Clic sull'indirizzo della voce | Apre la voce su Wikipedia |
 | Clic su "Salta voce" | Passa alla voce successiva |
@@ -218,6 +239,7 @@ Tutto viene salvato in `%LOCALAPPDATA%\WikiWall\`:
 | `wallpaper.png` | Ultimo sfondo generato |
 | `history.json` | Ultime voci usate |
 | `wikiwall.log` | Log del watcher |
+| `state.json` | Stato acceso/spento, rispettato anche dopo un riavvio |
 | `cache\quality.json` | Lista delle voci di qualità |
 | `cache\last_article.json` | Ultima voce, usata come fallback offline |
 

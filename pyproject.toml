@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "wikiwall"
-version = "0.3.0"
+version = "0.4.0"
 description = "Un articolo di qualità di Wikipedia italiano diverso sul tuo desktop Windows."
 readme = "README.md"
 requires-python = ">=3.11"

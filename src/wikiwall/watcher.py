@@ -3,11 +3,21 @@ from __future__ import annotations
 import logging
 import threading
 import time
+from pathlib import Path
 from typing import Any
 
 from .core import ChangeResult, WikiWall
-from .hotkey import HotkeyListener
+from .hotkey import (
+    MOD_ALT,
+    MOD_CONTROL,
+    MOD_NOREPEAT,
+    TOGGLE_HOTKEY_ID,
+    VK_O,
+    HotkeyListener,
+)
 from .overlay import run_overlay
+from .paths import state_path
+from .state import State, load_state, save_state
 from .wallpaper import get_idle_seconds, is_desktop_foreground
 
 LOGGER = logging.getLogger(__name__)
@@ -26,6 +36,8 @@ class Watcher:
         tick_seconds: float = 2.0,
         desktop_hold_seconds: float = 3.0,
         min_gap_seconds: float = 60.0,
+        state_file: Path | None = None,
+        enabled: bool = True,
     ) -> None:
         config = app.config
         self.app = app
@@ -54,7 +66,8 @@ class Watcher:
         self._overlay_stop = threading.Event()
         self._overlay_thread: threading.Thread | None = None
         self._hotkey: HotkeyListener | None = None
-        self._paused = False
+        self._enabled = enabled
+        self._state_file = state_file
         self._desktop_was_foreground = False
         self._tray: Any | None = None
 
@@ -68,8 +81,14 @@ class Watcher:
     # ------------------------------------------------------------------ public API
 
     @property
+    def enabled(self) -> bool:
+        """True while WikiWall is allowed to change the wallpaper."""
+        return self._enabled
+
+    @property
     def paused(self) -> bool:
-        return self._paused
+        """Alias kept for older callers: paused is the same as switched off."""
+        return not self._enabled
 
     @property
     def current_url(self) -> str:
@@ -94,10 +113,73 @@ class Watcher:
         ).start()
 
     def toggle_pause(self) -> None:
-        self._paused = not self._paused
-        if not self._paused:
+        """Backwards-compatible alias for :meth:`toggle_enabled`."""
+        self.toggle_enabled()
+
+    def toggle_enabled(self) -> bool:
+        """Switch WikiWall on or off and return the new state."""
+        return self.set_enabled(not self._enabled)
+
+    def toggle_enabled_async(self) -> None:
+        """Toggle from a callback thread without blocking it."""
+        threading.Thread(
+            target=self.toggle_enabled,
+            name="wikiwall-toggle",
+            daemon=True,
+        ).start()
+
+    def set_enabled(self, enabled: bool, *, persist: bool = True) -> bool:
+        """Turn the wallpaper rotation on or off, keeping the current image."""
+        enabled = bool(enabled)
+        changed = enabled != self._enabled
+        self._enabled = enabled
+        if enabled:
             self.last_idle = get_idle_seconds()
-        LOGGER.info("Watcher %s", "in pausa" if self._paused else "riattivato")
+        else:
+            self._change_requested.clear()
+        if changed:
+            LOGGER.info(
+                "WikiWall %s: lo sfondo resta quello attuale",
+                "acceso" if enabled else "spento",
+            )
+        if persist:
+            self._save_state()
+        self._refresh_tray()
+        return enabled
+
+    def _save_state(self) -> None:
+        path = self._state_file
+        if path is None:
+            return
+        try:
+            save_state(State(enabled=self._enabled, updated=time.time()), path)
+        except OSError:
+            LOGGER.debug("Impossibile salvare lo stato in %s", path, exc_info=True)
+
+    def _load_state(self) -> None:
+        """Read the persisted switch before the loop starts."""
+        path = self._state_file
+        if path is None:
+            return
+        state = load_state(path)
+        if state.enabled != self._enabled:
+            self._enabled = state.enabled
+            LOGGER.info("Stato salvato: WikiWall %s", state.describe())
+
+    def _poll_state(self) -> None:
+        """Apply an on/off choice made by another process (``wikiwall on|off``)."""
+        path = self._state_file
+        if path is None:
+            return
+        state = load_state(path)
+        if state.enabled == self._enabled:
+            return
+        self._enabled = state.enabled
+        if self._enabled:
+            self.last_idle = get_idle_seconds()
+        else:
+            self._change_requested.clear()
+        LOGGER.info("WikiWall %s (comando esterno)", state.describe())
         self._refresh_tray()
 
     def toggle_clickable_qr(self) -> None:
@@ -109,6 +191,9 @@ class Watcher:
         if self._tray is None:
             return
         try:
+            from .tray import apply_state
+
+            apply_state(self._tray, self)
             self._tray.update_menu()
         except Exception:  # noqa: BLE001 - the tray is optional
             LOGGER.debug("Impossibile aggiornare il menu della tray", exc_info=True)
@@ -132,6 +217,12 @@ class Watcher:
 
         try:
             self._hotkey = HotkeyListener(self.skip_async)
+            self._hotkey.add(
+                TOGGLE_HOTKEY_ID,
+                MOD_CONTROL | MOD_ALT | MOD_NOREPEAT,
+                VK_O,
+                self.toggle_enabled_async,
+            )
             self._hotkey.start()
         except Exception:  # noqa: BLE001 - the tray and the pill still work
             LOGGER.exception("Scorciatoia globale non disponibile")
@@ -161,7 +252,7 @@ class Watcher:
 
     def should_change(self, now: float, idle: float, desktop: bool) -> str | None:
         """Return a trigger name when the wallpaper should change now."""
-        if self._paused:
+        if not self._enabled:
             self.last_idle = idle
             return None
 
@@ -216,6 +307,15 @@ class Watcher:
         return True
 
     def run(self, with_tray: bool = True, with_overlay: bool = True) -> None:
+        # The turn-off choice must win over a restart: read it before the tray,
+        # so the icon is already grey when WikiWall starts switched off.
+        if self._state_file is None:
+            self._state_file = state_path()
+        if self._state_file.exists():
+            self._load_state()
+        else:
+            self._save_state()
+
         if with_tray:
             try:
                 from .tray import create_icon
@@ -231,13 +331,15 @@ class Watcher:
         self.last_change = time.monotonic() - self.interval_seconds - 1
         self.last_idle = get_idle_seconds()
         LOGGER.info(
-            "Watcher avviato: intervallo %.0f min, soglia inattività %.0f min",
+            "Watcher avviato: intervallo %.0f min, soglia inattività %.0f min, %s",
             self.interval_seconds / 60,
             self.idle_threshold_seconds / 60,
+            "acceso" if self._enabled else "spento",
         )
 
         try:
             while not self._stop.is_set():
+                self._poll_state()
                 now = time.monotonic()
                 idle = get_idle_seconds()
                 desktop = is_desktop_foreground()
@@ -245,7 +347,9 @@ class Watcher:
                 if self._change_requested.is_set():
                     self._change_requested.clear()
                     self.last_idle = idle
-                    reason: str | None = "manuale"
+                    reason: str | None = "manuale" if self._enabled else None
+                    if reason is None:
+                        LOGGER.info("Cambio ignorato: WikiWall è spento")
                 else:
                     reason = self.should_change(now, idle, desktop)
 
